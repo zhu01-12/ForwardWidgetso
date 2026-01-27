@@ -1,9 +1,9 @@
 WidgetMetadata = {
-  id: "gemini.trakt.random.mix.v3",
-  title: "Trakt 惊喜推荐 (Max版)",
-  author: "Gemini",
-  description: "从最近观看的 30 部剧中随机抽取 5 部进行混合推荐，12h 刷新",
-  version: "3.0.0",
+  id: "trakt.random",
+  title: "Trakt 惊喜推荐",
+  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+  description: "从Trakt最近观看的 30 部剧中随机抽取 5 部进行混合推荐，12h 刷新",
+  version: "1.0.3",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -28,9 +28,9 @@ WidgetMetadata = {
         },
         {
           name: "clientId",
-          title: "Trakt Client ID (选填)",
+          title: "Trakt Client ID (必填)",
           type: "input",
-          description: "建议填入以防限流",
+          description: "trakt申请api里的trakt client id",
         }
       ]
     }
