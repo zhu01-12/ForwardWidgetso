@@ -2,7 +2,7 @@ WidgetMetadata = {
     id: "trakt_random_pro",
     title: "Trakt 惊喜推荐",
     author: "MakkaPakka",
-    description: "从你最近观看的剧集中随机抽取 5 部进行混合推荐，每 12 小时刷新一次。",
+    description: "从你最近观看的剧集中随机抽取 5 部剧，推荐相似的剧集，每 12 小时刷新一次。",
     version: "3.0.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
