@@ -1,9 +1,9 @@
 // 严格遵循 basic-widget.md 定义元数据
 WidgetMetadata = {
-  id: "gemini.tv.calendar.strict",
+  id: "tv.calendar.strict",
   title: "全球追剧日历",
-  author: "Makka Pakka",
-  description: "根据TMDB日历生成追剧日历",
+  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+  description: "根据TMDB日期生成追剧日历",
   version: "2.2.0",
   requiredVersion: "0.0.1",
   modules: [
