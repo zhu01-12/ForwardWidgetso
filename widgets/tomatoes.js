@@ -1,9 +1,9 @@
 WidgetMetadata = {
-    id: "rottentomatoes",
+    id: "rottentomatoes_pro",
     title: "烂番茄口碑榜",
-    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-    description: "抓取 烂番茄 新鲜认证(>75%)榜单",
-    version: "2.3.1",
+    author: "MakkaPakka",
+    description: "抓取烂番茄新鲜认证(>75%)榜单，并自动匹配 TMDB 中文元数据。",
+    version: "2.2.7",
     requiredVersion: "0.0.1",
     site: "https://www.rottentomatoes.com",
 
@@ -222,4 +222,3 @@ async function searchTmdb(rtItem, apiKey, rank) {
         return null;
     }
 }
-
