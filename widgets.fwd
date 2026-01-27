@@ -107,7 +107,7 @@
       "title": "Trakt 惊喜推荐",
       "description": "从Trakt最近观看的 30 部剧中随机抽取 5 部进行混合推荐，12h 刷新",
       "requiredVersion": "0.0.1",
-      "version": "1.0.3",
+      "version": "1.0.6",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
       "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/traktrec.js"
     }
