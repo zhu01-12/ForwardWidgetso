@@ -1,7 +1,7 @@
 WidgetMetadata = {
     id: "tmdb_niche_genres",
     title: "设定控 | 趣味流派",
-    author: "MakkaPakka",
+    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
     description: "拒绝无聊分类！探索 赛博朋克/时空循环/克苏鲁/大逃杀 等特殊设定影视。",
     version: "1.0.0",
     requiredVersion: "0.0.1",
