@@ -6,186 +6,262 @@ WidgetMetadata = {
   description: "根据TMDB日期生成追剧日历",
   version: "2.2.0",
   requiredVersion: "0.0.1",
-  modules: [
-    {
-      title: "追剧日历",
-      functionName: "loadTvCalendar",
-      type: "list", // 明确指定列表类型
-      requiresWebView: false,
-      params: [
-        // 1. API Key - 放在最前，方便用户填写
+  site: "https://www.themoviedb.org",
+    
+    // 全局参数：用户只需填一次 Key
+    globalParams: [
         {
-          name: "apiKey",
-          title: "TMDB API Key (必填)",
-          type: "input",
-          description: "必须填写才能获取数据",
-        },
-        // 2. 时间模式
-        {
-          name: "mode",
-          title: "时间范围",
-          type: "enumeration",
-          value: "update_today",
-          enumOptions: [
-            { title: "今日更新 (Update Today)", value: "update_today" },
-            { title: "明日首播 (Premiere Tomorrow)", value: "premiere_tomorrow" },
-            { title: "7天内首播 (Next 7 Days)", value: "premiere_week" },
-            { title: "30天内首播 (Next 30 Days)", value: "premiere_month" }
-          ]
-        },
-        // 3. 地区选择 (含 Global)
-        {
-          name: "region",
-          title: "地区偏好",
-          type: "enumeration",
-          value: "Global",
-          enumOptions: [
-            { title: "全球聚合 (Global)", value: "Global" },
-            { title: "美国 (US)", value: "US" },
-            { title: "日本 (JP)", value: "JP" },
-            { title: "韩国 (KR)", value: "KR" },
-            { title: "中国 (CN)", value: "CN" },
-            { title: "英国 (GB)", value: "GB" }
-          ]
+            name: "apiKey",
+            title: "TMDB API Key (必填)",
+            type: "input",
+            description: "用于获取数据。请在 themoviedb.org 申请。",
+            value: ""
         }
-      ]
-    }
-  ]
+    ],
+
+    modules: [
+        // 模块 1: 每日更新 (包含老剧新集)
+        {
+            title: "每日更新",
+            description: "查看今天或近期有更新的剧集",
+            functionName: "loadUpdates",
+            type: "video", // 遵循规范使用 video 类型
+            cacheDuration: 3600,
+            params: [
+                {
+                    name: "range",
+                    title: "时间范围",
+                    type: "enumeration",
+                    value: "0",
+                    enumOptions: [
+                        { title: "今天 (Today)", value: "0" },
+                        { title: "明天 (Tomorrow)", value: "1" },
+                        { title: "近 3 天", value: "3" },
+                        { title: "近 7 天", value: "7" }
+                    ]
+                },
+                {
+                    name: "region",
+                    title: "地区筛选",
+                    type: "enumeration",
+                    value: "",
+                    enumOptions: [
+                        { title: "全球 (Global)", value: "" },
+                        { title: "国产 (CN)", value: "CN" },
+                        { title: "欧美 (US/GB)", value: "US|GB" },
+                        { title: "日本 (JP)", value: "JP" },
+                        { title: "韩国 (KR)", value: "KR" },
+                        { title: "港台 (HK/TW)", value: "HK|TW" }
+                    ]
+                }
+            ]
+        },
+        // 模块 2: 新剧首播 (只看新剧)
+        {
+            title: "新剧首播",
+            description: "查看近期上线的第一季新剧",
+            functionName: "loadPremieres",
+            type: "video",
+            cacheDuration: 7200,
+            params: [
+                {
+                    name: "range",
+                    title: "时间范围",
+                    type: "enumeration",
+                    value: "30",
+                    enumOptions: [
+                        { title: "近 7 天", value: "7" },
+                        { title: "近 30 天", value: "30" },
+                        { title: "未来 30 天", value: "future_30" }
+                    ]
+                },
+                {
+                    name: "region",
+                    title: "地区筛选",
+                    type: "enumeration",
+                    value: "",
+                    enumOptions: [
+                        { title: "全球 (Global)", value: "" },
+                        { title: "欧美 (US/GB)", value: "US|GB" },
+                        { title: "日本 (JP)", value: "JP" },
+                        { title: "韩国 (KR)", value: "KR" }
+                    ]
+                }
+            ]
+        }
+    ]
 };
 
+// ============================================
+// 核心逻辑
+// ============================================
+
+const BASE_URL = "https://api.themoviedb.org/3/discover/tv";
+const IMG_BASE = "https://image.tmdb.org/t/p/w500";
+const BACKDROP_BASE = "https://image.tmdb.org/t/p/w780";
+
 /**
- * 核心加载函数
- * 遵循 data-formats.md 返回 WidgetItem 数组
+ * 模块 1: 加载更新 (使用 air_date)
  */
-async function loadTvCalendar(params = {}) {
-  // 1. 安全检查 API Key
-  const apiKey = params.apiKey;
-  if (!apiKey) {
-    return [{
-      id: "error_no_key",
-      title: "❌ 配置缺失",
-      subTitle: "请在设置中填入 TMDB API Key",
-      type: "text", // 使用纯文本类型显示错误
-      url: "" // 防止点击报错
-    }];
-  }
-
-  const mode = params.mode || "update_today";
-  const region = params.region || "Global";
-
-  // 2. 计算日期 (YYYY-MM-DD)
-  const dates = calculateDates(mode);
-  
-  // 3. 确定查询字段 (首播 vs 更新)
-  const isPremiere = mode.includes("premiere");
-  const dateField = isPremiere ? "first_air_date" : "air_date";
-
-  // 4. 构建 TMDB Discover URL
-  let url = `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&sort_by=popularity.desc&include_null_first_air_dates=false&page=1&timezone=Asia/Shanghai&${dateField}.gte=${dates.start}&${dateField}.lte=${dates.end}`;
-
-  // 5. 地区与语言逻辑
-  if (region === "Global") {
-    // 全球模式：不限产地，但优先请求中文，方便阅读
-    url += `&language=zh-CN`;
-  } else {
-    // 特定地区：限制产地 + 限制原声语言 (保证数据纯净)
-    url += `&language=zh-CN&with_origin_country=${region}`;
+async function loadUpdates(params = {}) {
+    const { apiKey, range, region } = params;
     
-    // 智能语言锁定
-    const langMap = { "JP": "ja", "KR": "ko", "CN": "zh", "GB": "en", "US": "en" };
-    if (langMap[region]) {
-        url += `&with_original_language=${langMap[region]}`;
-    }
-  }
+    // 1. 计算日期范围
+    const { start, end } = getDateRange(range, false); // false = 不是未来模式
 
-  console.log(`[Calendar] Request: ${url}`);
+    // 2. 构造请求参数
+    const queryParams = {
+        api_key: apiKey,
+        language: "zh-CN",             // 强制中文
+        sort_by: "popularity.desc",    // 按热度排序
+        include_null_first_air_dates: false,
+        "air_date.gte": start,         // 播出日期 >= start
+        "air_date.lte": end,           // 播出日期 <= end
+        timezone: "Asia/Shanghai"      // 修正时区
+    };
 
-  try {
-    const res = await Widget.http.get(url);
-    const data = res.data || res;
-
-    if (!data.results || data.results.length === 0) {
-      return [{
-        id: "empty_result",
-        title: "📅 暂无更新",
-        subTitle: `${region} 在 ${dates.start} 无数据`,
-        type: "text"
-      }];
+    // 地区过滤
+    if (region) {
+        queryParams.with_origin_country = region;
     }
 
-    // 6. 数据映射 (严格遵循 data-formats.md)
-    return data.results.map(item => {
-      // 标题回退逻辑：优先 name (中文)，其次 original_name (原文)
-      const displayName = item.name || item.original_name;
-      const dateStr = item[dateField] || "待定";
-      
-      // 构造前缀
-      const prefix = mode === "update_today" ? "🆕" : `📅 ${dateStr.slice(5)}`;
-
-      return {
-        // 必须字段
-        id: String(item.id), // ID 必须是字符串
-        type: "tmdb",        // 类型必须明确
-        
-        // TMDB 特有字段 (用于 Emby 跳转)
-        tmdbId: parseInt(item.id), // SKILL.md: 必须是数字
-        mediaType: "tv",
-        
-        // 展示字段
-        title: `${prefix} | ${displayName}`,
-        subTitle: item.original_name !== displayName ? item.original_name : (item.overview || ""),
-        
-        // 图片 (使用完整 URL)
-        posterPath: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "",
-        backdropPath: item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : "",
-        
-        // 辅助信息
-        rating: item.vote_average ? item.vote_average.toFixed(1) : "0.0",
-        year: (item.first_air_date || "").substring(0, 4)
-      };
-    });
-
-  } catch (e) {
-    console.error(e);
-    return [{
-      id: "error_network",
-      title: "❌ 网络错误",
-      subTitle: e.message || "请求失败",
-      type: "text"
-    }];
-  }
+    return await fetchTmdbAndMap(queryParams, "更新");
 }
 
-// 日期计算工具 (纯函数)
-function calculateDates(mode) {
-  const today = new Date();
-  const toStr = (d) => d.toISOString().split('T')[0];
+/**
+ * 模块 2: 加载首播 (使用 first_air_date)
+ */
+async function loadPremieres(params = {}) {
+    const { apiKey, range, region } = params;
 
-  if (mode === "update_today") {
-    return { start: toStr(today), end: toStr(today) };
-  }
-  
-  if (mode === "premiere_tomorrow") {
-    const tmr = new Date(today);
-    tmr.setDate(today.getDate() + 1);
-    return { start: toStr(tmr), end: toStr(tmr) };
-  }
-  
-  if (mode === "premiere_week") {
-    const start = new Date(today);
-    start.setDate(today.getDate() + 1); // 从明天开始
-    const end = new Date(today);
-    end.setDate(today.getDate() + 7);
-    return { start: toStr(start), end: toStr(end) };
-  }
-  
-  if (mode === "premiere_month") {
-    const start = new Date(today);
-    start.setDate(today.getDate() + 1);
-    const end = new Date(today);
-    end.setDate(today.getDate() + 30);
-    return { start: toStr(start), end: toStr(end) };
-  }
-  
-  return { start: toStr(today), end: toStr(today) };
+    const isFuture = range === "future_30";
+    const days = isFuture ? 30 : parseInt(range);
+    
+    const { start, end } = getDateRange(days, isFuture);
+
+    const queryParams = {
+        api_key: apiKey,
+        language: "zh-CN",
+        sort_by: "popularity.desc",
+        include_null_first_air_dates: false,
+        "first_air_date.gte": start,   // 首播日期
+        "first_air_date.lte": end,
+        timezone: "Asia/Shanghai"
+    };
+
+    if (region) {
+        queryParams.with_origin_country = region;
+    }
+
+    return await fetchTmdbAndMap(queryParams, "首播");
+}
+
+// ============================================
+// 辅助函数
+// ============================================
+
+/**
+ * 通用请求与映射处理
+ */
+async function fetchTmdbAndMap(queryParams, tag) {
+    if (!queryParams.api_key) {
+        return [{
+            id: "error_no_key",
+            type: "text",
+            title: "❌ 请填写 TMDB API Key",
+            subTitle: "在组件设置中填写 Key 后即可获取中文海报和数据"
+        }];
+    }
+
+    console.log(`[TMDB] Request: ${JSON.stringify(queryParams)}`);
+
+    try {
+        const res = await Widget.http.get(BASE_URL, { params: queryParams });
+        const data = res.data || res;
+
+        if (!data.results || data.results.length === 0) {
+            return [{
+                id: "empty",
+                type: "text",
+                title: "暂无数据",
+                subTitle: "该时间段内无剧集更新"
+            }];
+        }
+
+        return data.results.map(item => {
+            // 优先显示中文名，没有则显示原名
+            const title = item.name || item.original_name;
+            const subTitle = item.original_name !== title ? item.original_name : "";
+            
+            return {
+                id: String(item.id), // 必须转字符串
+                type: "tmdb",        // 关键：Forward 会识别此类型并处理点击跳转
+                tmdbId: item.id,
+                mediaType: "tv",
+                
+                // 视觉信息
+                title: title,
+                subTitle: subTitle,
+                description: item.overview || "暂无简介",
+                
+                // 图片 (直接给完整链接，速度最快)
+                posterPath: item.poster_path ? `${IMG_BASE}${item.poster_path}` : "",
+                backdropPath: item.backdrop_path ? `${BACKDROP_BASE}${item.backdrop_path}` : "",
+                
+                // 元数据
+                rating: item.vote_average ? item.vote_average.toFixed(1) : "0.0",
+                year: (item.first_air_date || "").substring(0, 4),
+                
+                // 标记是首播还是更新 (显示在Extra或Log中，或者通过不同Subtitle展示)
+                // 这里我们简单地把 tag 放在 subTitle 前面如果需要的话，或者保持 clean
+            };
+        });
+
+    } catch (e) {
+        return [{
+            id: "error",
+            type: "text",
+            title: "请求失败",
+            subTitle: e.message
+        }];
+    }
+}
+
+/**
+ * 日期计算工具
+ */
+function getDateRange(rangeValue, isFuture) {
+    const today = new Date();
+    const target = new Date(today);
+    const toStr = (d) => d.toISOString().split('T')[0];
+
+    // 如果 rangeValue 是字符串 "0", "1", "30" 等
+    const days = parseInt(rangeValue);
+
+    if (isFuture) {
+        // 从明天开始往后推
+        today.setDate(today.getDate() + 1);
+        target.setDate(today.getDate() + days);
+        return { start: toStr(today), end: toStr(target) };
+    } else {
+        if (days === 0) {
+            // 今天
+            return { start: toStr(today), end: toStr(today) };
+        } else if (days === 1) {
+            // 明天
+            target.setDate(today.getDate() + 1);
+            return { start: toStr(target), end: toStr(target) };
+        } else {
+            // 过去N天 (更新) 或 未来N天 (根据逻辑)
+            // 这里逻辑定义为：如果是 loadUpdates，通常看"最近N天"
+            // 为了简化，我们假设是 Today 到 Today + N (如果是查看即将更新)
+            // 或者 Today - N 到 Today (查看历史更新)
+            // 参考原需求 "7天内上线"，通常指未来。
+            // 修正：TMDB Discover air_date 逻辑
+            
+            // 设定为：从今天开始的未来 N 天 (符合追剧日历习惯)
+            target.setDate(today.getDate() + days);
+            return { start: toStr(today), end: toStr(target) };
+        }
+    }
 }
