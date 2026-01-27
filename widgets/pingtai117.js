@@ -1,11 +1,11 @@
 WidgetMetadata = {
-  id: "gemini.platform.originals.final",
-  title: "流媒体·独家原创 (全局Key版)",
+  id: "gemini.platform.originals.final.v3",
+  title: "流媒体·独家原创 (信息增强)",
   author: "Gemini",
-  description: "Netflix/HBO/腾讯/B站 自制内容，支持全局 Key 设置",
-  version: "3.0.0",
+  description: "Netflix/HBO/腾讯/B站 自制内容，副标题显示日期与类型",
+  version: "3.1.0",
   requiredVersion: "0.0.1",
-  // 1. 正确的全局参数定义
+  // 1. 全局参数 (Global Params)
   globalParams: [
     {
       name: "apiKey",
@@ -83,7 +83,7 @@ const GENRE_MAP = {
 };
 
 async function loadPlatformOriginals(params = {}) {
-  // 2. 直接从 params 中获取全局定义的 apiKey
+  // 从全局参数获取 Key
   const apiKey = params.apiKey;
   
   if (!apiKey) {
@@ -99,16 +99,11 @@ async function loadPlatformOriginals(params = {}) {
   const genreId = params.genre || "";
   const sortBy = params.sortBy || "popularity.desc";
 
-  // 构建 URL
   let url = `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=zh-CN&include_adult=false&include_null_first_air_dates=false&page=1`;
   url += `&with_networks=${networkId}&sort_by=${sortBy}`;
   
   if (genreId) url += `&with_genres=${genreId}`;
-  
-  // 评分排序增加门槛，防止冷门高分
   if (sortBy.includes("vote_average")) url += `&vote_count.gte=200`;
-
-  console.log(`[Originals] Net:${networkId} Sort:${sortBy}`);
 
   try {
     const res = await Widget.http.get(url);
@@ -119,17 +114,20 @@ async function loadPlatformOriginals(params = {}) {
     }
 
     return data.results.map(item => {
-        // 3. 类型标签转换
-        const genres = (item.genre_ids || [])
+        // 1. 获取类型文本 (最多显示2个，用 / 分隔)
+        const genreText = (item.genre_ids || [])
             .map(id => GENRE_MAP[id])
             .filter(Boolean)
-            .slice(0, 3) // 最多显示3个标签
-            .join(" / ");
+            .slice(0, 2) 
+            .join("/");
         
-        // 4. 日期处理
+        // 2. 获取日期
         const date = item.first_air_date || "待定";
         const year = date.substring(0, 4);
-        const score = item.vote_average ? item.vote_average.toFixed(1) : "0.0";
+        
+        // 3. 组合副标题: [日期] • [类型]
+        // 例如: "2024-03-21 • 科幻奇幻/剧情"
+        const subTitleInfo = [date, genreText].filter(Boolean).join(" • ");
 
         return {
             id: String(item.id),
@@ -139,17 +137,17 @@ async function loadPlatformOriginals(params = {}) {
             
             title: item.name || item.original_name,
             
-            // 副标题：日期 | 评分
-            subTitle: `${date} | ⭐ ${score}`,
+            // 【关键修改】副标题显示：日期和类型
+            subTitle: subTitleInfo,
             
             posterPath: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "",
             backdropPath: item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : "",
             
-            rating: score,
+            rating: item.vote_average ? item.vote_average.toFixed(1) : "0.0",
             year: year,
             
-            // 描述：类型标签 + 简介
-            description: genres ? `🏷️ ${genres}\n${item.overview || ""}` : (item.overview || "暂无简介")
+            // 简介：显示评分 + 剧情
+            description: `⭐ ${item.vote_average.toFixed(1)} | ${item.overview || "暂无简介"}`
         };
     });
 
