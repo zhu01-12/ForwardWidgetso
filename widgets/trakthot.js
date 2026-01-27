@@ -1,8 +1,8 @@
 WidgetMetadata = {
-  id: "gemini.trakt.trending.debug",
-  title: "Trakt 热榜 (网络增强版)",
-  author: "Gemini",
-  description: "支持备用通道，修复网络错误提示",
+  id: "trakt.hot",
+  title: "Trakt 热榜",
+  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+  description: "以Trakt为数据源获取相关榜单",
   version: "1.1.0",
   requiredVersion: "0.0.1",
   modules: [
