@@ -1,7 +1,7 @@
 WidgetMetadata = {
-  id: "gemini.what.to.watch.v1",
+  id: "whattowatch",
   title: "今天看什么",
-  author: "Makka Pakka",
+  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
   description: "剧荒拯救者，随机或根据观看习惯推剧",
   version: "1.1.0",
   requiredVersion: "0.0.1",
