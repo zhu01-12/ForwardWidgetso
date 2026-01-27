@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "今天看什么",
     author: "MakkaPakka",
     description: "剧荒拯救者。支持 Trakt 历史推荐与随机发现，增强容错。",
-    version: "2.1.0",
+    version: "2.1.7",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
 
