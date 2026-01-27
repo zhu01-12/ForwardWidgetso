@@ -1,0 +1,43 @@
+{
+  "title": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖'𝙨 𝙒𝙞𝙙𝙜𝙚𝙩𝙨",
+  "description": "汇聚追剧日历,流媒体top10,烂番茄好评榜 等追剧模块",
+  "icon": "https://github.com/MakkaPakka518/ForwardWidgets/raw/main/icon.png",
+  "widgets": [
+    {
+      "id": "tv.calendar.strict",
+      "title": "全球追剧日历",
+      "description": "根据TMDB日期生成追剧日历",
+      "requiredVersion": "0.0.1",
+      "version": "2.2.0",
+      "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/zhuijurili.js"
+    },
+    {    
+      "id": "rottentomatoes",
+      "title": "烂番茄口碑榜",
+      "description": "抓取 烂番茄 新鲜认证(>75%)榜单",
+      "requiredVersion": "0.0.1",
+      "version": "2.2.1",
+      "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/tomatoes.js"
+    },
+    {
+      "id": "whattowatch",
+      "title": "今天看什么",
+      "description": "剧荒拯救者，随机或根据观看习惯推剧",
+      "requiredVersion": "0.0.1",
+      "version": "1.1.0",
+      "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/todaywatch.js"
+    },
+    {
+      "id": "flixpatrol.strict",
+      "title": "国外流媒体 TOP10 榜单",
+      "description": "抓取 Netflix/HBO等平台 官方榜单",
+      "requiredVersion": "0.0.1",
+      "version": "2.1.0",
+      "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/top10.js"
+    }
+  ]
+}
