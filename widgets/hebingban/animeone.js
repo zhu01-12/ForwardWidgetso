@@ -1,8 +1,8 @@
 WidgetMetadata = {
     id: "anime_omni_fix",
-    title: "二次元全境聚合 (修复版)",
+    title: "二次元全境聚合",
     author: "MakkaPakka",
-    description: "修复 B 站数据获取问题，支持免 Key 和无限加载。",
+    description: "一站式聚合多平台动漫榜单。",
     version: "2.1.0",
     requiredVersion: "0.0.1",
     site: "https://www.bilibili.com",
