@@ -7,21 +7,14 @@ WidgetMetadata = {
     requiredVersion: "0.0.1",
     site: "https://flixpatrol.com",
  
-    // 1. 全局参数
-    globalParams: [
-        {
-            name: "apiKey",
-            title: "TMDB API Key (必填)",
-            type: "input",
-            description: "用于获取海报和匹配中文数据。",
-            value: ""
-        }
-    ],
+    // 0. 全局免 Key
+    globalParams: [],
+
     modules: [
         {
             title: "官方 Top 10",
             functionName: "loadOfficialTop10",
-            type: "list", // 推荐使用 list 类型以支持 genreTitle
+            type: "list",
             cacheDuration: 3600,
             params: [
                 {
@@ -66,7 +59,6 @@ WidgetMetadata = {
     ]
 };
 
-// TMDB 类型映射表 (通用)
 const GENRE_MAP = {
     28: "动作", 12: "冒险", 16: "动画", 35: "喜剧", 80: "犯罪", 99: "纪录片",
     18: "剧情", 10751: "家庭", 14: "奇幻", 36: "历史", 27: "恐怖", 10402: "音乐",
@@ -76,11 +68,7 @@ const GENRE_MAP = {
 };
 
 async function loadOfficialTop10(params = {}) {
-    const { apiKey, platform = "netflix", region = "united-states", mediaType = "tv" } = params;
-
-    if (!apiKey) {
-        return [{ id: "err_no_key", type: "text", title: "配置缺失", subTitle: "请在设置中填入 TMDB API Key" }];
-    }
+    const { platform = "netflix", region = "united-states", mediaType = "tv" } = params;
 
     console.log(`[FlixPatrol] Fetching: ${platform} / ${region}`);
 
@@ -90,12 +78,12 @@ async function loadOfficialTop10(params = {}) {
     // 2. 兜底
     if (titles.length === 0) {
         console.log("[FlixPatrol] Failed, fallback to TMDB...");
-        return await fetchTmdbFallback(platform, region, mediaType, apiKey);
+        return await fetchTmdbFallback(platform, region, mediaType);
     }
 
-    // 3. 匹配
+    // 3. 匹配 (免 Key)
     const searchPromises = titles.slice(0, 10).map((title, index) => 
-        searchTmdb(title, mediaType, apiKey, index + 1)
+        searchTmdb(title, mediaType, index + 1)
     );
 
     const results = await Promise.all(searchPromises);
@@ -108,10 +96,7 @@ async function loadOfficialTop10(params = {}) {
     return finalItems;
 }
 
-// ==========================================
-// 辅助函数
-// ==========================================
-
+// 抓取逻辑
 async function fetchFlixPatrolData(platform, region, mediaType) {
     const url = `https://flixpatrol.com/top10/${platform}/${region}/`;
     try {
@@ -134,14 +119,13 @@ async function fetchFlixPatrolData(platform, region, mediaType) {
                 return false;
             }
         });
-
         if (!targetTable) {
             const tables = $('table tbody');
             if (tables.length >= 2) targetTable = mediaType === "movie" ? tables.eq(0) : tables.eq(1);
             else if (tables.length === 1) targetTable = tables.eq(0);
             else return [];
         }
-
+        
         const titles = [];
         targetTable.find('tr').each((i, el) => {
             if (i >= 10) return;
@@ -154,26 +138,27 @@ async function fetchFlixPatrolData(platform, region, mediaType) {
     } catch (e) { return []; }
 }
 
-async function searchTmdb(queryTitle, mediaType, apiKey, rank) {
+async function searchTmdb(queryTitle, mediaType, rank) {
     const cleanTitle = queryTitle.trim();
-    const url = `https://api.themoviedb.org/3/search/${mediaType}?api_key=${apiKey}&query=${encodeURIComponent(cleanTitle)}&language=zh-CN`;
-
     try {
-        const res = await Widget.http.get(url);
-        const data = res.data;
-        if (!data || !data.results || data.results.length === 0) return null;
+        // 免 Key 搜索
+        const res = await Widget.tmdb.get(`/search/${mediaType}`, {
+            params: { query: cleanTitle, language: "zh-CN" }
+        });
+        
+        const data = res || {};
+        if (!data.results || data.results.length === 0) return null;
         
         const match = data.results[0];
         
-        // 1. 获取类型文本
         const genreText = (match.genre_ids || [])
             .map(id => GENRE_MAP[id])
             .filter(Boolean)
             .slice(0, 2)
             .join(" / ");
             
-        // 2. 获取年份
         const year = (match.first_air_date || match.release_date || "").substring(0, 4);
+        const score = match.vote_average ? match.vote_average.toFixed(1) : "0.0";
 
         return {
             id: String(match.id),
@@ -186,42 +171,51 @@ async function searchTmdb(queryTitle, mediaType, apiKey, rank) {
             // 【UI 核心】年份 • 类型
             genreTitle: [year, genreText].filter(Boolean).join(" • "),
             
-            // 副标题：原名
-            subTitle: match.original_name || match.original_title,
-            
+            subTitle: `TMDB ${score}`,
             description: `榜单来源: FlixPatrol #${rank}`,
             
             posterPath: match.poster_path ? `https://image.tmdb.org/t/p/w500${match.poster_path}` : "",
             backdropPath: match.backdrop_path ? `https://image.tmdb.org/t/p/w780${match.backdrop_path}` : "",
             
-            rating: match.vote_average ? match.vote_average.toFixed(1) : "0.0",
+            rating: score,
             year: year
         };
     } catch (e) { return null; }
 }
 
-async function fetchTmdbFallback(platform, region, mediaType, apiKey) {
+async function fetchTmdbFallback(platform, region, mediaType) {
     const providerMap = { "netflix": "8", "disney": "337", "hbo": "1899|118", "apple-tv": "350", "amazon-prime": "119" };
     const regionMap = { "united-states": "US", "south-korea": "KR", "taiwan": "TW", "hong-kong": "HK", "japan": "JP", "united-kingdom": "GB" };
     
     const pid = providerMap[platform] || "8";
     const reg = regionMap[region] || "US";
-    const url = `https://api.themoviedb.org/3/discover/${mediaType}?api_key=${apiKey}&watch_region=${reg}&with_watch_providers=${pid}&sort_by=popularity.desc&page=1&language=zh-CN`;
 
     try {
-        const res = await Widget.http.get(url);
-        return (res.data?.results || []).slice(0, 10).map((item, index) => {
+        // 免 Key 兜底
+        const res = await Widget.tmdb.get(`/discover/${mediaType}`, {
+            params: {
+                watch_region: reg,
+                with_watch_providers: pid,
+                sort_by: "popularity.desc",
+                page: 1,
+                language: "zh-CN"
+            }
+        });
+
+        const data = res || {};
+        return (data.results || []).slice(0, 10).map((item, index) => {
             const year = (item.first_air_date || item.release_date || "").substring(0, 4);
             const genreText = (item.genre_ids || []).map(id => GENRE_MAP[id]).slice(0, 2).join(" / ");
-            
+            const score = item.vote_average ? item.vote_average.toFixed(1) : "0.0";
+
             return {
                 id: String(item.id), type: "tmdb", tmdbId: item.id, mediaType: mediaType,
                 title: `${index + 1}. ${item.title || item.name}`,
-                genreTitle: [year, genreText].filter(Boolean).join(" • "), // 兜底也加上
-                subTitle: item.original_name || item.original_title,
+                genreTitle: [year, genreText].filter(Boolean).join(" • "),
+                subTitle: `TMDB ${score}`,
                 posterPath: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "",
                 backdropPath: item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : "",
-                rating: item.vote_average ? item.vote_average.toFixed(1) : "0.0",
+                rating: score,
                 year: year,
                 description: `平台热度 #${index + 1}`
             };
