@@ -1,8 +1,8 @@
 WidgetMetadata = {
     id: "trakt_personal_fixed",
-    title: "Trakt 个人中心 (修复版)",
-    author: "MakkaPakka",
-    description: "一站式管理 Trakt 待看、收藏、历史。支持分页和排序优化。",
+    title: "Trakt 个人中心",
+    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+    description: "一站式获取 Trakt 待看、收藏、历史清单。",
     version: "2.2.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
@@ -17,7 +17,7 @@ WidgetMetadata = {
         },
         {
             name: "traktClientId",
-            title: "Trakt Client ID (选填)",
+            title: "Trakt Client ID (选填，不填可能没数据)",
             type: "input",
             description: "默认使用公共 ID。",
             value: ""
