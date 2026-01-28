@@ -17,7 +17,7 @@
       "title": "Trakt 个人中心",
       "description": "一站式获取 Trakt 待看/收藏/历史。",
       "requiredVersion": "0.0.1",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
       "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/traktlistpro.js"
     },
