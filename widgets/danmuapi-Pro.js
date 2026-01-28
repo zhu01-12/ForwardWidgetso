@@ -8,10 +8,10 @@ WidgetMetadata = {
   site: "https://github.com/huangxd-/ForwardWidgets",
   globalParams: [
     // --- 源 1 (主源) ---
-    { name: "s1_name", title: "源1 自定义名称1", type: "input", value: "官方源" },
+    { name: "s1_name", title: "源1 自定义名称1", type: "input", value: "弹弹PLAY" },
     { name: "s1_url", title: "源1 地址1", type: "input", value: "https://api.dandanplay.net", description: "必填" },
     // --- 源 2 (备用) ---
-    { name: "s2_name", title: "源2 自定义名称2", type: "input", value: "备用源" },
+    { name: "s2_name", title: "源2 自定义名称2", type: "input", value: "源2" },
     { name: "s2_url", title: "源2 地址2", type: "input", description: "选填" },
     // --- 源 3 (备用) ---
     { name: "s3_name", title: "源3 自定义名称3", type: "input" },
