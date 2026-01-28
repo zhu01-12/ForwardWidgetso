@@ -2,26 +2,14 @@ WidgetMetadata = {
     id: "trakt_personal_mixed",
     title: "Trakt 个人中心",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-    description: "一站式获取 Trakt 待看/收藏/历史。",
-    version: "1.0.4",
+    description: "追剧日历:显示你观看剧集最新集的 更新时间&Trakt 待看/收藏/历史。",
+    version: "1.0.5",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
 
     globalParams: [
-        {
-            name: "traktUser",
-            title: "Trakt 用户名 (必填)",
-            type: "input",
-            description: "你的 Trakt ID (Slug)",
-            value: ""
-        },
-        {
-            name: "traktClientId",
-            title: "Trakt Client ID (必填)",
-            type: "input",
-            description: "请前往 trakt.tv/oauth/applications 申请",
-            value: ""
-        }
+        { name: "traktUser", title: "Trakt 用户名 (必填)", type: "input", value: "" },
+        { name: "traktClientId", title: "Trakt Client ID (必填)", type: "input", value: "" }
     ],
 
     modules: [
@@ -37,10 +25,10 @@ WidgetMetadata = {
                     type: "enumeration",
                     value: "watchlist",
                     enumOptions: [
-                        { title: "📜 待看列表 (Watchlist)", value: "watchlist" },
-                        { title: "📦 收藏列表 (Collection)", value: "collection" },
-                        { title: "🕒 观看历史 (History)", value: "history" },
-                        { title: "⭐ 评分记录 (Ratings)", value: "ratings" }
+                        { title: "📅 追剧日历", value: "updates" },
+                        { title: "📜 待看列表", value: "watchlist" },
+                        { title: "📦 收藏列表", value: "collection" },
+                        { title: "🕒 观看历史", value: "history" }
                     ]
                 },
                 {
@@ -48,22 +36,23 @@ WidgetMetadata = {
                     title: "内容筛选",
                     type: "enumeration",
                     value: "all",
+                    belongTo: { paramName: "section", value: ["watchlist", "collection", "history"] },
                     enumOptions: [
-                        { title: "全部 (剧集+电影)", value: "all" }, // 新增混合模式
+                        { title: "全部", value: "all" },
                         { title: "剧集", value: "shows" },
                         { title: "电影", value: "movies" }
                     ]
                 },
+                // 仅对追剧日历有效
                 {
-                    name: "sort",
-                    title: "排序 (仅待看)",
+                    name: "updateSort",
+                    title: "追剧排序",
                     type: "enumeration",
-                    value: "added,desc",
-                    belongTo: { paramName: "section", value: ["watchlist"] },
+                    value: "air_date",
+                    belongTo: { paramName: "section", value: ["updates"] },
                     enumOptions: [
-                        { title: "最新添加", value: "added,desc" },
-                        { title: "最早添加", value: "added,asc" },
-                        { title: "默认排行", value: "rank,asc" }
+                        { title: "按更新时间", value: "air_date" },
+                        { title: "按观看时间", value: "watched_at" }
                     ]
                 },
                 { name: "page", title: "页码", type: "page" }
@@ -73,77 +62,59 @@ WidgetMetadata = {
 };
 
 async function loadTraktProfile(params = {}) {
-    const { traktUser, traktClientId, section, type = "all", sort = "added,desc", page = 1 } = params;
+    const { traktUser, traktClientId, section, updateSort = "air_date", type = "all", page = 1 } = params;
 
-    if (!traktUser) return [{ id: "err_user", type: "text", title: "请填写 Trakt 用户名" }];
-    if (!traktClientId) return [{ id: "err_id", type: "text", title: "请填写 Trakt Client ID" }];
+    if (!traktUser || !traktClientId) return [{ id: "err", type: "text", title: "请填写用户名和Client ID" }];
 
-    // --- 混合模式处理 (All) ---
-    // Trakt API 不支持直接分页获取混合列表
-    // 策略：如果是 "all"，我们同时请求 shows 和 movies，然后在本地合并
-    // 注意：混合分页比较复杂，这里采用 "伪混合"：
-    // Page 1: 取 Movie Page 1 + Show Page 1，按时间排序，截取前 15 个。
-    // 这种方式在翻页时可能会有遗漏或重复，但在 Widget 这种轻量场景下是可接受的。
-    
+    // === A. 追剧日历 (Updates) ===
+    // (代码与上一版完全一致，此处省略以节省篇幅，重点看 B 部分)
+    if (section === "updates") {
+        return await loadUpdatesLogic(traktUser, traktClientId, updateSort, page);
+    }
+
+    // === B. 常规列表 (Watchlist/History/Collection) ===
     let rawItems = [];
+    const sortType = "added,desc"; // 默认按添加时间倒序
 
     if (type === "all") {
-        // 并发请求 Movie 和 Show
+        // 混合模式：同时请求
         const [movies, shows] = await Promise.all([
-            fetchTraktList(section, "movies", sort, page, traktUser, traktClientId),
-            fetchTraktList(section, "shows", sort, page, traktUser, traktClientId)
+            fetchTraktList(section, "movies", sortType, page, traktUser, traktClientId),
+            fetchTraktList(section, "shows", sortType, page, traktUser, traktClientId)
         ]);
-        
-        // 合并
         rawItems = [...movies, ...shows];
-        
-        // 本地排序 (混合后必须重排)
-        // 依据 listed_at (Watchlist), watched_at (History), rated_at (Ratings), collected_at
-        // 统称为 timeKey
-        rawItems.sort((a, b) => {
-            const timeA = new Date(getItemTime(a, section)).getTime();
-            const timeB = new Date(getItemTime(b, section)).getTime();
-            // 降序 (最新的在前)
-            return sort.includes("asc") ? timeA - timeB : timeB - timeA;
-        });
-        
-        // 截取当前页数量 (15个)
-        // 注意：因为我们要混合，所以实际上我们要的数据可能横跨两个API的页码
-        // 简单处理：每次都取两边的 Page N，然后混合，虽然不精确，但够用。
-        // 或者：显示 30 个 (15+15)
-        // 这里不做 slice，全部返回给用户看，体验更好
-        
     } else {
-        // 单一模式
-        rawItems = await fetchTraktList(section, type, sort, page, traktUser, traktClientId);
+        // 单模式
+        rawItems = await fetchTraktList(section, type, sortType, page, traktUser, traktClientId);
     }
 
-    if (!rawItems || rawItems.length === 0) {
-        return page === 1 ? [{ id: "empty", type: "text", title: "列表为空" }] : [];
-    }
+    // --- 核心修复：本地强制排序 ---
+    // 无论 API 返回什么顺序，我们都在本地按时间戳强排一遍
+    rawItems.sort((a, b) => {
+        const timeA = new Date(getItemTime(a, section)).getTime();
+        const timeB = new Date(getItemTime(b, section)).getTime();
+        // 倒序：大时间（晚）在前
+        return timeB - timeA;
+    });
 
-    // 转换为 Forward Items
+    if (!rawItems || rawItems.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "列表为空" }] : [];
+
     const promises = rawItems.map(async (item) => {
         const subject = item.show || item.movie || item;
         const mediaType = item.show ? "tv" : "movie";
         if (!subject?.ids?.tmdb) return null;
 
+        // 构造副标题
         let subInfo = "";
         const timeStr = getItemTime(item, section);
         if (timeStr) {
             const date = timeStr.split('T')[0];
             if (section === "watchlist") subInfo = `添加于 ${date}`;
             else if (section === "history") subInfo = `观看于 ${date}`;
-            else if (section === "ratings") subInfo = `评分 ${item.rating} (${date})`;
-            else subInfo = date;
-        } else {
-            subInfo = `Trakt: ${subject.year || ""}`;
+            else if (section === "collection") subInfo = `收藏于 ${date}`;
         }
 
-        // 拼接类型标签
-        if (type === "all") {
-            subInfo = `[${mediaType === "tv" ? "剧集" : "电影"}] ${subInfo}`;
-        }
+        if (type === "all") subInfo = `[${mediaType === "tv" ? "剧" : "影"}] ${subInfo}`;
 
         return await fetchTmdbDetail(subject.ids.tmdb, mediaType, subInfo, subject.title);
     });
@@ -151,24 +122,69 @@ async function loadTraktProfile(params = {}) {
     return (await Promise.all(promises)).filter(Boolean);
 }
 
-// 通用 Trakt 请求
+// 提取时间字段 (核心)
+function getItemTime(item, section) {
+    // Watchlist: listed_at
+    if (section === "watchlist") return item.listed_at;
+    // History: watched_at
+    if (section === "history") return item.watched_at;
+    // Collection: collected_at
+    if (section === "collection") return item.collected_at;
+    // Fallback
+    return item.created_at || "1970-01-01";
+}
+
+// 追剧日历逻辑封装
+async function loadUpdatesLogic(user, id, sort, page) {
+    const url = `https://api.trakt.tv/users/${user}/watched/shows?extended=noseasons&limit=100`;
+    try {
+        const res = await Widget.http.get(url, {
+            headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": id }
+        });
+        const data = res.data || [];
+        if (data.length === 0) return [{ id: "empty", type: "text", title: "无观看记录" }];
+
+        const enrichedShows = await Promise.all(data.slice(0, 60).map(async (item) => {
+            if (!item.show?.ids?.tmdb) return null;
+            const tmdb = await fetchTmdbShowDetails(item.show.ids.tmdb);
+            if (!tmdb) return null;
+            return {
+                trakt: item, tmdb: tmdb,
+                airDate: tmdb.last_episode_to_air?.air_date || "1970",
+                watchedDate: item.last_watched_at
+            };
+        }));
+
+        const valid = enrichedShows.filter(Boolean);
+        if (sort === "air_date") valid.sort((a, b) => new Date(b.airDate) - new Date(a.airDate));
+        else valid.sort((a, b) => new Date(b.watchedDate) - new Date(a.watchedDate));
+
+        const start = (page - 1) * 15;
+        return valid.slice(start, start + 15).map(item => {
+            const d = item.tmdb;
+            let dateLabel = "暂无排期", epInfo = "已完结";
+            if (d.next_episode_to_air) {
+                dateLabel = `🔜 ${d.next_episode_to_air.air_date}`;
+                epInfo = `S${d.next_episode_to_air.season_number}E${d.next_episode_to_air.episode_number}`;
+            } else if (d.last_episode_to_air) {
+                dateLabel = `📅 ${d.last_episode_to_air.air_date}`;
+                epInfo = `S${d.last_episode_to_air.season_number}E${d.last_episode_to_air.episode_number}`;
+            }
+            return {
+                id: String(d.id), tmdbId: d.id, type: "tmdb", mediaType: "tv",
+                title: d.name, genreTitle: dateLabel, subTitle: epInfo,
+                posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
+                description: `上次观看: ${item.trakt.last_watched_at.split("T")[0]}\n${d.overview}`
+            };
+        });
+    } catch (e) { return []; }
+}
+
 async function fetchTraktList(section, type, sort, page, user, id) {
-    let url = "";
-    const sortMode = sort.split(",")[0]; 
-    
-    // 增加 limit，如果是混合模式，每边取 10 个，凑 20 个
-    const limit = 15; 
-
-    if (section === "watchlist") {
-        url = `https://api.trakt.tv/users/${user}/watchlist/${type}/${sortMode}?extended=full&page=${page}&limit=${limit}`;
-    } else if (section === "collection") {
-        url = `https://api.trakt.tv/users/${user}/collection/${type}?extended=full&page=${page}&limit=${limit}`;
-    } else if (section === "history") {
-        url = `https://api.trakt.tv/users/${user}/history/${type}?extended=full&page=${page}&limit=${limit}`;
-    } else if (section === "ratings") {
-        url = `https://api.trakt.tv/users/${user}/ratings/${type}?extended=full&page=${page}&limit=${limit}`;
-    }
-
+    // 增加 limit 以支持混合排序的消耗
+    // 因为混合排序可能导致前几页全是电影，后几页全是剧集，所以多取点
+    const limit = 20; 
+    const url = `https://api.trakt.tv/users/${user}/${section}/${type}?extended=full&page=${page}&limit=${limit}`;
     try {
         const res = await Widget.http.get(url, {
             headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": id }
@@ -177,32 +193,19 @@ async function fetchTraktList(section, type, sort, page, user, id) {
     } catch (e) { return []; }
 }
 
-// 获取用于排序的时间字段
-function getItemTime(item, section) {
-    if (section === "watchlist") return item.listed_at;
-    if (section === "history") return item.watched_at;
-    if (section === "collection") return item.collected_at;
-    if (section === "ratings") return item.rated_at;
-    return null;
-}
-
-// TMDB 详情 (免 Key)
 async function fetchTmdbDetail(id, type, subInfo, originalTitle) {
     try {
         const d = await Widget.tmdb.get(`/${type}/${id}`, { params: { language: "zh-CN" } });
         const year = (d.first_air_date || d.release_date || "").substring(0, 4);
-        const genreText = (d.genres || []).map(g => g.name).slice(0, 2).join(" / ");
-        
         return {
             id: String(d.id), tmdbId: d.id, type: "tmdb", mediaType: type,
             title: d.name || d.title || originalTitle,
-            genreTitle: [year, genreText].filter(Boolean).join(" • "),
-            subTitle: subInfo,
-            posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
-            backdropPath: d.backdrop_path ? `https://image.tmdb.org/t/p/w780${d.backdrop_path}` : "",
-            description: d.overview || "暂无简介",
-            rating: d.vote_average?.toFixed(1),
-            year: year
+            genreTitle: year, subTitle: subInfo, description: d.overview,
+            posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : ""
         };
     } catch (e) { return null; }
+}
+
+async function fetchTmdbShowDetails(id) {
+    try { return await Widget.tmdb.get(`/tv/${id}`, { params: { language: "zh-CN" } }); } catch (e) { return null; }
 }
