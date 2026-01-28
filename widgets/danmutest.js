@@ -1,29 +1,15 @@
 WidgetMetadata = {
-    id: "danmu_api_ultimate",
-    title: "多源弹幕 (繁简转换版)",
-    version: "2.0.0",
-    requiredVersion: "0.0.1",
-    description: "聚合多源弹幕，支持繁简互转。",
+    id: "danmu_official_enhanced",
+    title: "弹幕获取器 (官方增强)",
     author: "MakkaPakka",
-    site: "https://github.com/h05n/ForwardWidgets",
+    description: "基于官方模板修复，支持多源并发、季数匹配和繁简转换。",
+    version: "2.0.0",
+    requiredVersion: "0.0.2",
     globalParams: [
-        // --- 弹幕源配置 (同模块A) ---
         { name: "server", title: "源1 (必填)", type: "input", value: "https://api.dandanplay.net" },
         { name: "server2", title: "源2", type: "input" },
         { name: "server3", title: "源3", type: "input" },
-        { name: "server4", title: "源4", type: "input" },
-        // --- 功能配置 (来自模块B) ---
-        {
-            name: "convertMode",
-            title: "🔠 弹幕转换",
-            type: "enumeration",
-            value: "none",
-            enumOptions: [
-                { title: "保持原样", value: "none" },
-                { title: "转简体 (繁->简)", value: "t2s" },
-                { title: "转繁体 (简->繁)", value: "s2t" }
-            ]
-        }
+        { name: "server4", title: "源4", type: "input" }
     ],
     modules: [
         { id: "searchDanmu", title: "搜索", functionName: "searchDanmu", type: "danmu", params: [] },
@@ -33,158 +19,139 @@ WidgetMetadata = {
 };
 
 // ==========================================
-// 1. 繁简转换核心 (移植自模块B)
+// 1. 基础工具
 // ==========================================
-const DICT_URL_S2T = "https://cdn.jsdelivr.net/npm/opencc-data@1.0.3/data/STCharacters.txt";
-const DICT_URL_T2S = "https://cdn.jsdelivr.net/npm/opencc-data@1.0.3/data/TSCharacters.txt";
-let MEM_S2T_MAP = null;
-let MEM_T2S_MAP = null;
 
-async function initDict(mode) {
-    if (!mode || mode === "none") return;
-    if (mode === "s2t" && MEM_S2T_MAP) return;
-    if (mode === "t2s" && MEM_T2S_MAP) return;
-
-    const storageKey = `dict_${mode}_v1`;
-    let localData = await Widget.storage.get(storageKey);
-
-    if (!localData) {
-        try {
-            console.log(`[Dict] Downloading ${mode}...`);
-            const res = await Widget.http.get(mode === "s2t" ? DICT_URL_S2T : DICT_URL_T2S);
-            let textData = res.data || res;
-            if (typeof textData === 'string' && textData.length > 100) {
-                const mapObj = parseDictText(textData);
-                await Widget.storage.set(storageKey, JSON.stringify(mapObj));
-                if (mode === "s2t") MEM_S2T_MAP = mapObj; else MEM_T2S_MAP = mapObj;
-            }
-        } catch (e) { console.error("Dict download failed", e); }
-    } else {
-        try {
-            const mapObj = JSON.parse(localData);
-            if (mode === "s2t") MEM_S2T_MAP = mapObj; else MEM_T2S_MAP = mapObj;
-        } catch (e) { await Widget.storage.remove(storageKey); }
-    }
-}
-
-function parseDictText(text) {
-    const map = {};
-    text.split('\n').forEach(line => {
-        const parts = line.split(/\s+/);
-        if (parts.length >= 2) map[parts[0]] = parts[1];
-    });
-    return map;
-}
-
-function convertText(text, mode) {
-    if (!text || !mode || mode === "none") return text;
-    const dict = (mode === "s2t") ? MEM_S2T_MAP : MEM_T2S_MAP;
-    if (!dict) return text;
-    return text.split('').map(char => dict[char] || char).join('');
-}
-
-// ==========================================
-// 2. 基础工具 (模块A风格)
-// ==========================================
-function normalizeServer(s) {
-    return s && typeof s === "string" && !s.includes("{") ? s.trim().replace(/\/+$/, "") : "";
-}
-
-function getServersFromParams(params) {
+function getServers(params) {
     return [params.server, params.server2, params.server3, params.server4]
-        .map(normalizeServer).filter(s => /^https?:\/\//i.test(s));
+        .filter(s => s && s.startsWith("http"))
+        .map(s => s.replace(/\/$/, ""));
 }
 
 async function safeGet(url) {
     try {
-        const res = await Widget.http.get(url, { headers: { "User-Agent": "ForwardWidgets/2.0" } });
+        const res = await Widget.http.get(url, { 
+            headers: { "Content-Type": "application/json", "User-Agent": "ForwardWidgets/2.0" } 
+        });
         const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
         return { ok: true, data };
     } catch (e) { return { ok: false }; }
 }
 
+function convertChineseNumber(str) {
+    if (/^\d+$/.test(str)) return Number(str);
+    const map = {'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'百':100,'千':1000,'壹':1,'貳':2,'參':3,'肆':4,'伍':5,'陸':6,'柒':7,'捌':8,'玖':9,'拾':10,'佰':100,'仟':1000};
+    let res = 0, curr = 0, lastUnit = 1;
+    for (let char of str) {
+        if (map[char] < 10) curr = map[char];
+        else {
+            let unit = map[char];
+            if (curr === 0) curr = 1;
+            if (unit >= lastUnit) res = curr * unit; else res += curr * unit;
+            lastUnit = unit; curr = 0;
+        }
+    }
+    return res + curr;
+}
+
 // ==========================================
-// 3. 核心业务逻辑
+// 2. 核心功能
 // ==========================================
 
 async function searchDanmu(params) {
-    const { title, season } = params;
-    const servers = getServersFromParams(params);
+    const { title, season, type } = params;
+    const servers = getServers(params);
     if (!servers.length) return { animes: [] };
 
-    const tasks = servers.map(server => 
-        safeGet(`${server}/api/v2/search/anime?keyword=${encodeURIComponent(title)}`)
+    // 并发搜索
+    const tasks = servers.map(srv => 
+        safeGet(`${srv}/api/v2/search/anime?keyword=${encodeURIComponent(title)}`)
     );
     const results = await Promise.all(tasks);
 
-    let animes = [];
+    let allAnimes = [];
     results.forEach((r, i) => {
         if (r.ok && r.data?.animes) {
-            // 给每个 animeID 加上 server 前缀，方便后续 getDetail 知道去哪里取
-            const prefix = servers[i];
-            const taggedAnimes = r.data.animes.map(a => ({
-                ...a,
-                animeId: `${prefix}|${a.animeId}` // 关键：标记来源
-            }));
-            animes = animes.concat(taggedAnimes);
+            // 标记来源：serverUrl|animeId
+            const tagged = r.data.animes.map(a => ({ ...a, animeId: `${servers[i]}|${a.animeId}` }));
+            allAnimes = allAnimes.concat(tagged);
         }
     });
 
-    return { animes }; // 这里简化了 season 匹配逻辑，如有需要可再加回 matchSeason
+    if (allAnimes.length === 0) return { animes: [] };
+
+    // --- 官方过滤逻辑移植 ---
+    
+    // 1. 类型过滤
+    let filtered = allAnimes.filter(a => {
+        if (type === "tv") return (a.type === "tvseries" || a.type === "web");
+        if (type === "movie") return a.type === "movie";
+        return true; 
+    });
+
+    // 2. 季数匹配 (这是官方代码最精华的部分)
+    if (season) {
+        const matched = filtered.filter(a => {
+            if (!a.animeTitle.includes(title)) return false;
+            // 尝试提取标题后的部分，例如 "xxx 第二季"
+            // 简单处理：分割字符串
+            const parts = a.animeTitle.split(" ");
+            // 遍历每个部分找季数
+            for (let part of parts) {
+                // 找阿拉伯数字
+                const numMatch = part.match(/\d+/);
+                if (numMatch && parseInt(numMatch[0]) == season) return true;
+                // 找中文数字
+                const cnMatch = part.match(/[一二三四五六七八九十壹贰叁肆伍陆柒捌玖拾]+/);
+                if (cnMatch && convertChineseNumber(cnMatch[0]) == season) return true;
+            }
+            // 如果标题完全匹配且 season=1，也算
+            if (a.animeTitle.trim() === title.trim() && season == 1) return true;
+            
+            return false;
+        });
+        
+        // 如果有匹配的季数，优先展示；否则降级展示所有
+        if (matched.length > 0) filtered = matched;
+    }
+
+    return { animes: filtered };
 }
 
 async function getDetailById(params) {
     const { animeId } = params;
-    // 解析 server|realId
+    // 解析 ID: server|realId
     const parts = animeId.split('|');
     const realId = parts.pop();
-    const serverUrl = parts.join('|'); // 防止 URL 本身含 |
+    const server = parts.join('|');
 
-    if (!serverUrl) return [];
+    if (!server) return [];
 
-    const res = await safeGet(`${serverUrl}/api/v2/bangumi/${realId}`);
+    const res = await safeGet(`${server}/api/v2/bangumi/${realId}`);
     if (!res.ok || !res.data?.bangumi?.episodes) return [];
 
-    // 给 episodeId 也加上前缀
+    // 给 episodeId 也打上标记
     return res.data.bangumi.episodes.map(ep => ({
         ...ep,
-        episodeId: `${serverUrl}|${ep.episodeId}`
+        episodeId: `${server}|${ep.episodeId}`
     }));
 }
 
 async function getCommentsById(params) {
-    const { commentId, convertMode } = params;
+    const { commentId } = params;
     if (!commentId) return null;
 
-    // 1. 预加载字典 (异步)
-    await initDict(convertMode);
-
-    // 2. 解析来源
     const parts = commentId.split('|');
     const realId = parts.pop();
-    const serverUrl = parts.join('|');
+    const server = parts.join('|');
 
-    if (!serverUrl) return null;
+    if (!server) return null;
 
-    // 3. 请求弹幕
-    // chConvert=0: 告诉服务端不要转，我们自己转
-    const res = await safeGet(`${serverUrl}/api/v2/comment/${realId}?withRelated=true&chConvert=0`);
+    // 关键：保留 chConvert=1 (繁简转换)
+    const res = await safeGet(`${server}/api/v2/comment/${realId}?withRelated=true&chConvert=1`);
     
     if (!res.ok || !res.data) return null;
 
-    let base = res.data;
-    
-    // 4. 执行转换
-    if (convertMode !== "none") {
-        const list = base.danmakus || base.comments || [];
-        list.forEach(d => {
-            // 弹幕内容字段通常是 m 或 p (p有时候包含内容)
-            // dandanplay 标准: p="时间,类型...", m="内容"
-            if (d.m) d.m = convertText(d.m, convertMode);
-            // 有些旧接口可能用 message
-            if (d.message) d.message = convertText(d.message, convertMode);
-        });
-    }
-
-    return base;
+    // 返回标准结构
+    return res.data;
 }
