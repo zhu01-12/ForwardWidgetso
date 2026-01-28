@@ -1,9 +1,9 @@
 WidgetMetadata = {
-    id: "danmu_official_enhanced",
-    title: "弹幕获取器 (官方增强)",
+    id: "danmu_ultimate_fix",
+    title: "多源弹幕 (兼容版)",
     author: "MakkaPakka",
-    description: "基于官方模板修复，支持多源并发、季数匹配和繁简转换。",
-    version: "2.0.0",
+    description: "基于官方单源逻辑扩展，支持多源自动切换与繁简转换。",
+    version: "3.0.0",
     requiredVersion: "0.0.2",
     globalParams: [
         { name: "server", title: "源1 (必填)", type: "input", value: "https://api.dandanplay.net" },
@@ -18,29 +18,132 @@ WidgetMetadata = {
     ]
 };
 
-// ==========================================
-// 1. 基础工具
-// ==========================================
+// --- 内存缓存：记录 animeId 对应的服务器 ---
+// 既然不能改 ID 格式，我们就用内存记住 "ID: 12345" 是属于 "Server 2" 的
+// 注意：Forward 每次运行可能是独立的，所以利用 Storage 更稳
+const SOURCE_MAP_KEY = "danmu_source_map";
 
-function getServers(params) {
-    return [params.server, params.server2, params.server3, params.server4]
+async function saveSourceMap(animeId, serverUrl) {
+    let map = await Widget.storage.get(SOURCE_MAP_KEY);
+    map = map ? JSON.parse(map) : {};
+    map[animeId] = serverUrl;
+    await Widget.storage.set(SOURCE_MAP_KEY, JSON.stringify(map));
+}
+
+async function getSource(animeId) {
+    let map = await Widget.storage.get(SOURCE_MAP_KEY);
+    map = map ? JSON.parse(map) : {};
+    // 如果没有记录，默认用源1
+    return map[animeId]; 
+}
+
+// --- 核心功能 ---
+
+async function searchDanmu(params) {
+    const { title, season, type } = params;
+    
+    // 获取所有配置的源
+    const servers = [params.server, params.server2, params.server3, params.server4]
         .filter(s => s && s.startsWith("http"))
         .map(s => s.replace(/\/$/, ""));
+
+    if (servers.length === 0) return { animes: [] };
+
+    // 并发搜索所有源
+    const tasks = servers.map(async (server) => {
+        try {
+            const res = await Widget.http.get(`${server}/api/v2/search/anime?keyword=${encodeURIComponent(title)}`, {
+                headers: { "Content-Type": "application/json", "User-Agent": "ForwardWidgets/2.0" }
+            });
+            const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+            if (data && data.success && data.animes && data.animes.length > 0) {
+                return { server, animes: data.animes };
+            }
+        } catch (e) {}
+        return null;
+    });
+
+    const results = await Promise.all(tasks);
+    
+    // 合并结果
+    let finalAnimes = [];
+    for (const res of results) {
+        if (res) {
+            // 为每个结果保存来源映射
+            for (const anime of res.animes) {
+                // 关键：把 ID 和 Server 的关系存下来
+                await saveSourceMap(anime.animeId, res.server);
+            }
+            finalAnimes = finalAnimes.concat(res.animes);
+        }
+    }
+
+    // 官方过滤逻辑 (季数匹配)
+    if (finalAnimes.length > 0 && season) {
+        const matched = finalAnimes.filter(a => {
+            if (!a.animeTitle.includes(title)) return false;
+            const parts = a.animeTitle.split(" ");
+            for (let part of parts) {
+                const num = part.match(/\d+/);
+                if (num && parseInt(num[0]) == season) return true;
+                const cn = part.match(/[一二三四五六七八九十]+/);
+                if (cn && convertChineseNumber(cn[0]) == season) return true;
+            }
+            return (a.animeTitle.trim() === title.trim() && season == 1);
+        });
+        if (matched.length > 0) finalAnimes = matched;
+    }
+
+    return { animes: finalAnimes };
 }
 
-async function safeGet(url) {
+async function getDetailById(params) {
+    const { animeId } = params;
+    
+    // 1. 尝试从 Storage 获取该 ID 对应的 Server
+    let server = await getSource(animeId);
+    // 2. 兜底：如果没找到，用源1
+    if (!server) server = params.server;
+
     try {
-        const res = await Widget.http.get(url, { 
-            headers: { "Content-Type": "application/json", "User-Agent": "ForwardWidgets/2.0" } 
+        const res = await Widget.http.get(`${server}/api/v2/bangumi/${animeId}`, {
+            headers: { "Content-Type": "application/json", "User-Agent": "ForwardWidgets/2.0" }
         });
         const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
-        return { ok: true, data };
-    } catch (e) { return { ok: false }; }
+        
+        if (data && data.bangumi && data.bangumi.episodes) {
+            // 为每个 episodeId 也保存来源 (通常 episodeId 是独立的，但也可能跟 animeId 在同一个命名空间)
+            // 弹弹play 的 episodeId 在获取弹幕时会用到 (作为 commentId)
+            for (const ep of data.bangumi.episodes) {
+                await saveSourceMap(ep.episodeId, server);
+            }
+            return data.bangumi.episodes;
+        }
+    } catch (e) {}
+    return [];
 }
 
+async function getCommentsById(params) {
+    const { commentId } = params;
+    if (!commentId) return null;
+
+    // 1. 获取对应的 Server
+    let server = await getSource(commentId);
+    if (!server) server = params.server;
+
+    try {
+        // 2. 请求弹幕 (chConvert=1 开启繁简转换)
+        const res = await Widget.http.get(`${server}/api/v2/comment/${commentId}?withRelated=true&chConvert=1`, {
+            headers: { "Content-Type": "application/json", "User-Agent": "ForwardWidgets/2.0" }
+        });
+        const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        return data;
+    } catch (e) { return null; }
+}
+
+// 辅助：中文数字转阿拉伯
 function convertChineseNumber(str) {
-    if (/^\d+$/.test(str)) return Number(str);
-    const map = {'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'百':100,'千':1000,'壹':1,'貳':2,'參':3,'肆':4,'伍':5,'陸':6,'柒':7,'捌':8,'玖':9,'拾':10,'佰':100,'仟':1000};
+    const map = {'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10};
     let res = 0, curr = 0, lastUnit = 1;
     for (let char of str) {
         if (map[char] < 10) curr = map[char];
@@ -52,106 +155,4 @@ function convertChineseNumber(str) {
         }
     }
     return res + curr;
-}
-
-// ==========================================
-// 2. 核心功能
-// ==========================================
-
-async function searchDanmu(params) {
-    const { title, season, type } = params;
-    const servers = getServers(params);
-    if (!servers.length) return { animes: [] };
-
-    // 并发搜索
-    const tasks = servers.map(srv => 
-        safeGet(`${srv}/api/v2/search/anime?keyword=${encodeURIComponent(title)}`)
-    );
-    const results = await Promise.all(tasks);
-
-    let allAnimes = [];
-    results.forEach((r, i) => {
-        if (r.ok && r.data?.animes) {
-            // 标记来源：serverUrl|animeId
-            const tagged = r.data.animes.map(a => ({ ...a, animeId: `${servers[i]}|${a.animeId}` }));
-            allAnimes = allAnimes.concat(tagged);
-        }
-    });
-
-    if (allAnimes.length === 0) return { animes: [] };
-
-    // --- 官方过滤逻辑移植 ---
-    
-    // 1. 类型过滤
-    let filtered = allAnimes.filter(a => {
-        if (type === "tv") return (a.type === "tvseries" || a.type === "web");
-        if (type === "movie") return a.type === "movie";
-        return true; 
-    });
-
-    // 2. 季数匹配 (这是官方代码最精华的部分)
-    if (season) {
-        const matched = filtered.filter(a => {
-            if (!a.animeTitle.includes(title)) return false;
-            // 尝试提取标题后的部分，例如 "xxx 第二季"
-            // 简单处理：分割字符串
-            const parts = a.animeTitle.split(" ");
-            // 遍历每个部分找季数
-            for (let part of parts) {
-                // 找阿拉伯数字
-                const numMatch = part.match(/\d+/);
-                if (numMatch && parseInt(numMatch[0]) == season) return true;
-                // 找中文数字
-                const cnMatch = part.match(/[一二三四五六七八九十壹贰叁肆伍陆柒捌玖拾]+/);
-                if (cnMatch && convertChineseNumber(cnMatch[0]) == season) return true;
-            }
-            // 如果标题完全匹配且 season=1，也算
-            if (a.animeTitle.trim() === title.trim() && season == 1) return true;
-            
-            return false;
-        });
-        
-        // 如果有匹配的季数，优先展示；否则降级展示所有
-        if (matched.length > 0) filtered = matched;
-    }
-
-    return { animes: filtered };
-}
-
-async function getDetailById(params) {
-    const { animeId } = params;
-    // 解析 ID: server|realId
-    const parts = animeId.split('|');
-    const realId = parts.pop();
-    const server = parts.join('|');
-
-    if (!server) return [];
-
-    const res = await safeGet(`${server}/api/v2/bangumi/${realId}`);
-    if (!res.ok || !res.data?.bangumi?.episodes) return [];
-
-    // 给 episodeId 也打上标记
-    return res.data.bangumi.episodes.map(ep => ({
-        ...ep,
-        episodeId: `${server}|${ep.episodeId}`
-    }));
-}
-
-async function getCommentsById(params) {
-    const { commentId } = params;
-    if (!commentId) return null;
-
-    const parts = commentId.split('|');
-    const realId = parts.pop();
-    const server = parts.join('|');
-
-    if (!server) return null;
-
-    // 关键：保留 chConvert=1 (繁简转换)
-    const res = await safeGet(`${server}/api/v2/comment/${realId}?withRelated=true&chConvert=1`);
-    
-    if (!res.ok || !res.data) return null;
-
-    // 返回标准结构
-    return res.data;
 }
