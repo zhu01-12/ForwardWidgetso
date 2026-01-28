@@ -4,7 +4,7 @@ WidgetMetadata = {
   version: "1.0.7",
   requiredVersion: "0.0.2",
   description: "支持添加多条api并自命名&繁简互转",
-  author: "MakkaPakka",
+  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
   site: "https://github.com/huangxd-/ForwardWidgets",
   globalParams: [
     // --- 源 1 (主源) ---
