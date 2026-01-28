@@ -6,22 +6,15 @@ WidgetMetadata = {
     version: "2.2.8",
     requiredVersion: "0.0.1",
     site: "https://www.rottentomatoes.com",
-    
-    // 1. 全局参数
-    globalParams: [
-        {
-            name: "apiKey",
-            title: "TMDB API Key (必填)",
-            type: "input",
-            description: "用于获取中文海报和详情。",
-            value: ""
-        }
-    ],
+
+    // 0. 全局免 Key
+    globalParams: [],
+
     modules: [
         {
             title: "口碑避雷针",
             functionName: "loadRottenTomatoes",
-            type: "list", // 推荐使用 list 类型以支持 genreTitle
+            type: "list",
             cacheDuration: 3600,
             params: [
                 {
@@ -42,7 +35,6 @@ WidgetMetadata = {
     ]
 };
 
-// TMDB 类型映射表
 const GENRE_MAP = {
     28: "动作", 12: "冒险", 16: "动画", 35: "喜剧", 80: "犯罪", 99: "纪录片",
     18: "剧情", 10751: "家庭", 14: "奇幻", 36: "历史", 27: "恐怖", 10402: "音乐",
@@ -50,10 +42,6 @@ const GENRE_MAP = {
     10752: "战争", 37: "西部", 10759: "动作冒险", 10762: "儿童", 10763: "新闻",
     10764: "真人秀", 10765: "科幻奇幻", 10766: "肥皂剧", 10767: "脱口秀", 10768: "战争政治"
 };
-
-const TMDB_API = "https://api.themoviedb.org/3";
-const IMG_BASE = "https://image.tmdb.org/t/p/w500";
-const BACKDROP_BASE = "https://image.tmdb.org/t/p/w780";
 
 const RT_URLS = {
     "movies_theater": "https://www.rottentomatoes.com/browse/movies_in_theaters/sort:popular?minTomato=75",
@@ -64,11 +52,7 @@ const RT_URLS = {
 };
 
 async function loadRottenTomatoes(params = {}) {
-    const { apiKey, listType = "movies_home" } = params;
-
-    if (!apiKey) {
-        return [{ id: "err_no_key", type: "text", title: "配置缺失", subTitle: "请在设置中填入 TMDB API Key" }];
-    }
+    const { listType = "movies_home" } = params;
 
     console.log(`[RT] Fetching: ${listType}`);
     const rtItems = await fetchRottenTomatoesList(listType);
@@ -78,7 +62,7 @@ async function loadRottenTomatoes(params = {}) {
     }
 
     const matchPromises = rtItems.slice(0, 15).map((item, index) => 
-        searchTmdb(item, apiKey, index + 1)
+        searchTmdb(item, index + 1)
     );
 
     const results = await Promise.all(matchPromises);
@@ -118,16 +102,17 @@ async function fetchRottenTomatoesList(type) {
     } catch (e) { return []; }
 }
 
-async function searchTmdb(rtItem, apiKey, rank) {
+async function searchTmdb(rtItem, rank) {
     const cleanTitle = rtItem.title.replace(/\s\(\d{4}\)$/, "");
-    const url = `${TMDB_API}/search/${rtItem.mediaType}`;
-
+    
     try {
-        const res = await Widget.http.get(url, {
-            params: { api_key: apiKey, query: cleanTitle, language: "zh-CN" }
+        // 使用 Widget.tmdb.get 免 Key 搜索
+        const res = await Widget.tmdb.get(`/search/${rtItem.mediaType}`, {
+            params: { query: cleanTitle, language: "zh-CN" }
         });
-        const data = res.data;
-        if (!data || !data.results || data.results.length === 0) return null;
+        
+        const data = res || {};
+        if (!data.results || data.results.length === 0) return null;
         
         const match = data.results[0];
         
@@ -141,7 +126,7 @@ async function searchTmdb(rtItem, apiKey, rank) {
         // 2. 获取年份
         const year = (match.first_air_date || match.release_date || "").substring(0, 4);
 
-        // 3. 构造副标题 (分数)
+        // 3. 构造副标题 (烂番茄分数)
         let scoreTags = [];
         if (rtItem.tomatoScore) scoreTags.push(`🍅 ${rtItem.tomatoScore}%`);
         if (rtItem.popcornScore) scoreTags.push(`🍿 ${rtItem.popcornScore}%`);
@@ -163,8 +148,8 @@ async function searchTmdb(rtItem, apiKey, rank) {
             
             description: match.overview || `原名: ${rtItem.title}`,
             
-            posterPath: match.poster_path ? `${IMG_BASE}${match.poster_path}` : "",
-            backdropPath: match.backdrop_path ? `${BACKDROP_BASE}${match.backdrop_path}` : "",
+            posterPath: match.poster_path ? `https://image.tmdb.org/t/p/w500${match.poster_path}` : "",
+            backdropPath: match.backdrop_path ? `https://image.tmdb.org/t/p/w780${match.backdrop_path}` : "",
             
             rating: match.vote_average ? match.vote_average.toFixed(1) : "0.0",
             year: year
