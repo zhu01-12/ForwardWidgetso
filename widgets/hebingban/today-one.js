@@ -52,7 +52,7 @@ WidgetMetadata = {
         // 模块 2: 惊喜推荐 (基于 Trakt 混合推荐)
         // ===========================================
         {
-            title: "惊喜推荐 (混合)",
+            title: "惊喜推荐 (根据trakt观看历史推荐)",
             functionName: "loadRandomMix",
             type: "list",
             cacheDuration: 21600, // 6小时刷新
