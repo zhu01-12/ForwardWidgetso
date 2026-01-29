@@ -1,420 +1,269 @@
 WidgetMetadata = {
-    id: "discover_hub_ultimate_v2",
-    title: "探索发现 | 终极版",
+    id: "anime_omni_fix_v2.1",
+    title: "二次元全境聚合 (Bangumi修复)",
     author: "MakkaPakka",
-    description: "聚合【今天看什么】、【惊喜推荐】与【那年今日】。支持按片名找相似。",
-    version: "5.0.0",
+    description: "增强了 Bangumi 的 TMDB 匹配成功率，未匹配项目支持跳转。",
+    version: "2.2.0",
     requiredVersion: "0.0.1",
-    site: "https://www.themoviedb.org",
+    site: "https://bgm.tv",
 
-    // 1. 全局参数
-    globalParams: [
-        {
-            name: "traktUser",
-            title: "Trakt 用户名 (可选)",
-            type: "input",
-            description: "填入 Trakt Slug 可基于历史推荐。",
-            value: ""
-        },
-        {
-            name: "traktClientId",
-            title: "Trakt Client ID (选填)",
-            type: "input",
-            description: "Trakt 专用，不填则使用公共 ID。",
-            value: ""
-        }
-    ],
+    // 0. 全局免 Key
+    globalParams: [],
 
     modules: [
-        // ===========================================
-        // 模块 1: 今天看什么 (随机/相似)
-        // ===========================================
         {
-            title: "今天看什么",
-            functionName: "loadRecommendations",
+            title: "动漫热榜&周更表",
+            functionName: "loadAnimeHub",
             type: "list",
-            cacheDuration: 0, 
+            cacheDuration: 3600,
             params: [
                 {
-                    name: "mode",
-                    title: "推荐模式",
+                    name: "source",
+                    title: "选择榜单",
                     type: "enumeration",
-                    value: "random",
+                    value: "bgm_today", // 默认改成 Bangumi 方便测试
                     enumOptions: [
-                        { title: "🎲 随便看看 (随机/Trakt)", value: "random" },
-                        { title: "🔍 找相似 (输入片名)", value: "similar" }
+                        { title: "🌸 Bangumi - 每日放送 (今天)", value: "bgm_today" },
+                        { title: "📅 Bangumi - 周更表 (选日期)", value: "bgm_weekly" },
+                        { title: "📺 B站 - 番剧热播", value: "bili_hot" },
+                        { title: "📺 B站 - 国创热播", value: "bili_cn" },
+                        { title: "🌍 MAL - 历史 Top 100", value: "mal_top" },
+                        { title: "🌍 MAL - 当前热播", value: "mal_airing" }
                     ]
                 },
                 {
-                    name: "keyword",
-                    title: "输入片名 (仅找相似)",
-                    type: "input",
-                    description: "例如：绝命毒师、流浪地球",
-                    belongTo: { paramName: "mode", value: ["similar"] }
-                },
-                {
-                    name: "mediaType",
-                    title: "内容类型",
+                    name: "weekday",
+                    title: "选择日期 (仅周更表)",
                     type: "enumeration",
-                    value: "tv",
+                    value: "today",
+                    belongTo: { paramName: "source", value: ["bgm_weekly"] },
                     enumOptions: [
-                        { title: "电视剧", value: "tv" },
-                        { title: "电影", value: "movie" }
+                        { title: "周一 (月)", value: "1" },
+                        { title: "周二 (火)", value: "2" },
+                        { title: "周三 (水)", value: "3" },
+                        { title: "周四 (木)", value: "4" },
+                        { title: "周五 (金)", value: "5" },
+                        { title: "周六 (土)", value: "6" },
+                        { title: "周日 (日)", value: "7" }
                     ]
                 },
                 { name: "page", title: "页码", type: "page" }
-            ]
-        },
-
-        // ===========================================
-        // 模块 2: 惊喜推荐 (混合)
-        // ===========================================
-        {
-            title: "惊喜推荐 (混合)",
-            functionName: "loadRandomMix",
-            type: "list",
-            cacheDuration: 21600, 
-            params: [] 
-        },
-
-        // ===========================================
-        // 模块 3: 那年今日
-        // ===========================================
-        {
-            title: "那年今日",
-            functionName: "loadHistoryToday",
-            type: "list",
-            cacheDuration: 43200, 
-            params: [
-                {
-                    name: "region",
-                    title: "上映地区",
-                    type: "enumeration",
-                    value: "Global",
-                    enumOptions: [
-                        { title: "全球 (Global)", value: "Global" },
-                        { title: "美国 (US)", value: "US" },
-                        { title: "中国 (CN)", value: "CN" },
-                        { title: "香港 (HK)", value: "HK" },
-                        { title: "日本 (JP)", value: "JP" }
-                    ]
-                },
-                {
-                    name: "sortOrder",
-                    title: "排序方式",
-                    type: "enumeration",
-                    value: "time_desc",
-                    enumOptions: [
-                        { title: "时间: 由近到远", value: "time_desc" },
-                        { title: "评分: 由高到低", value: "vote_desc" },
-                        { title: "热度: 由高到低", value: "pop_desc" }
-                    ]
-                }
             ]
         }
     ]
 };
 
-// =========================================================================
-// 0. 通用工具与字典
-// =========================================================================
-
-const DEFAULT_TRAKT_ID = "003666572e92c4331002a28114387693994e43f5454659f81640a232f08a5996";
-
+// ==========================================
+// 0. 通用配置
+// ==========================================
 const GENRE_MAP = {
-    28: "动作", 12: "冒险", 16: "动画", 35: "喜剧", 80: "犯罪", 99: "纪录片",
-    18: "剧情", 10751: "家庭", 14: "奇幻", 36: "历史", 27: "恐怖", 10402: "音乐",
-    9648: "悬疑", 10749: "爱情", 878: "科幻", 10770: "电视电影", 53: "惊悚",
-    10752: "战争", 37: "西部", 10759: "动作冒险", 10762: "儿童", 10763: "新闻",
-    10764: "真人秀", 10765: "科幻奇幻", 10766: "肥皂剧", 10767: "脱口秀", 10768: "战争政治"
+    16: "动画", 10759: "动作冒险", 10765: "科幻奇幻", 35: "喜剧", 18: "剧情", 9648: "悬疑", 80: "犯罪", 10762: "儿童", 10751: "家庭"
 };
 
 function getGenreText(ids) {
     if (!ids || !Array.isArray(ids)) return "";
-    return ids.map(id => GENRE_MAP[id]).filter(Boolean).slice(0, 3).join(" / ");
+    return ids.map(id => GENRE_MAP[id]).filter(Boolean).slice(0, 2).join(" / ");
 }
 
-function buildItem({ id, tmdbId, type, title, year, poster, backdrop, rating, genreText, subTitle, desc }) {
+function buildItem({ id, tmdbId, type, title, year, poster, backdrop, rating, genreText, subTitle, desc, link }) {
+    // 智能处理海报：如果是 http 开头则保留，否则拼 TMDB
+    const fullPoster = poster && poster.startsWith("http") ? poster : (poster ? `https://image.tmdb.org/t/p/w500${poster}` : "");
+    const fullBackdrop = backdrop && backdrop.startsWith("http") ? backdrop : (backdrop ? `https://image.tmdb.org/t/p/w780${backdrop}` : "");
+
     return {
         id: String(id),
-        tmdbId: parseInt(tmdbId),
-        type: "tmdb",
-        mediaType: type,
+        tmdbId: parseInt(tmdbId) || 0,
+        type: type, // tmdb 或 link
+        mediaType: "tv",
         title: title,
         genreTitle: [year, genreText].filter(Boolean).join(" • "), 
         subTitle: subTitle,
-        posterPath: poster ? `https://image.tmdb.org/t/p/w500${poster}` : "",
-        backdropPath: backdrop ? `https://image.tmdb.org/t/p/w780${backdrop}` : "",
+        posterPath: fullPoster,
+        backdropPath: fullBackdrop,
         description: desc || "暂无简介",
         rating: rating,
-        year: year
+        year: year,
+        link: link // 仅当 type="link" 时有效
     };
 }
 
-// =========================================================================
-// 1. 业务逻辑：今天看什么 (含找相似)
-// =========================================================================
-
-async function loadRecommendations(params = {}) {
-    const { traktUser, mediaType = "tv", mode = "random", keyword } = params;
-    const page = params.page || 1;
-    const traktClientId = params.traktClientId || DEFAULT_TRAKT_ID;
-
-    // --- A. 找相似模式 ---
-    if (mode === "similar") {
-        if (!keyword) return [{ id: "info", type: "text", title: "请输入片名" }];
-        
-        // 1. 搜片名拿 ID
-        const seedItem = await searchTmdb(keyword, mediaType);
-        if (!seedItem) return [{ id: "err", type: "text", title: "未找到该片", subTitle: "请尝试更换关键词" }];
-
-        // 2. 拿推荐
-        const results = await fetchTmdbRecommendations(seedItem.id, mediaType, page);
-        
-        if (!results || results.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无推荐" }] : [];
-
-        return results.map(item => {
-            const year = (item.first_air_date || item.release_date || "").substring(0, 4);
-            const genreText = getGenreText(item.genre_ids);
-            return buildItem({
-                id: item.id, tmdbId: item.id, type: mediaType,
-                title: item.name || item.title, year: year, poster: item.poster_path, backdrop: item.backdrop_path,
-                rating: item.vote_average?.toFixed(1), genreText: genreText,
-                subTitle: `✨ 因为: ${seedItem.name || seedItem.title}`, // 提示来源
-                desc: item.overview
-            });
-        });
-    }
-
-    // --- B. 随机/Trakt 模式 (原有逻辑) ---
-    let results = [];
-    let reason = "";
-
-    if (traktUser) {
-        try {
-            const historyItem = await fetchLastWatched(traktUser, mediaType, traktClientId);
-            if (historyItem && historyItem.tmdbId) {
-                reason = `✨ 因为你看过: ${historyItem.title}`;
-                results = await fetchTmdbRecommendations(historyItem.tmdbId, mediaType, page);
-            } else {
-                reason = "暂无记录，随机推荐";
-                results = await fetchRandomTmdb(mediaType, page);
-            }
-        } catch (e) {
-            reason = "Trakt 连接失败，随机推荐";
-            results = await fetchRandomTmdb(mediaType, page);
-        }
-    } else {
-        reason = "🎲 随机发现";
-        results = await fetchRandomTmdb(mediaType, page);
-    }
-
-    if (!results || results.length === 0) return page === 1 ? [{ id: "err", type: "text", title: "未找到推荐" }] : [];
-
-    return results.slice(0, 15).map(item => {
-        const year = (item.first_air_date || item.release_date || "").substring(0, 4);
-        const genreText = getGenreText(item.genre_ids);
-        return buildItem({
-            id: item.id, tmdbId: item.id, type: mediaType,
-            title: item.name || item.title, year: year, poster: item.poster_path, backdrop: item.backdrop_path,
-            rating: item.vote_average?.toFixed(1), genreText: genreText,
-            subTitle: reason, desc: item.overview
-        });
-    });
+// ==========================================
+// 1. 核心分发
+// ==========================================
+async function loadAnimeHub(params = {}) {
+    const { source, page = 1, weekday = "today" } = params;
+    if (source.startsWith("bili_")) return await fetchBilibiliRankSafe(source === "bili_cn" ? 4 : 1, page);
+    if (source.startsWith("mal_")) return await fetchMalData(source.replace("mal_", ""), page);
+    if (source.startsWith("bgm_")) return await fetchBangumiCalendar(source === "bgm_today" ? "today" : weekday, page);
 }
 
-// =========================================================================
-// 2. 业务逻辑：惊喜推荐 (混合)
-// =========================================================================
-
-async function loadRandomMix(params = {}) {
-    const { traktUser, traktClientId } = params;
-    const clientId = traktClientId || DEFAULT_TRAKT_ID;
-
-    if (!traktUser) return [{ id: "err", type: "text", title: "需填写 Trakt 用户名" }];
-
-    const uniqueShows = await fetchUniqueHistory(traktUser, clientId);
-    if (uniqueShows.length === 0) return [{ id: "empty", type: "text", title: "Trakt 无历史记录" }];
-
-    const candidatePool = uniqueShows.slice(0, 30);
-    const seeds = getRandomSeeds(candidatePool, Math.min(candidatePool.length, 5));
-
-    const promiseList = seeds.map(seed => fetchTmdbRecsForSeed(seed));
-    const resultsArray = await Promise.all(promiseList);
-
-    const mixedList = [];
-    let maxLen = 0;
-    resultsArray.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
-
-    const seenIds = new Set();
-    for (let i = 0; i < maxLen; i++) {
-        for (const list of resultsArray) {
-            if (i < list.length) {
-                const item = list[i];
-                if (!seenIds.has(item.tmdbId)) {
-                    seenIds.add(item.tmdbId);
-                    mixedList.push(item);
-                }
-            }
-        }
+// ==========================================
+// 逻辑 C: Bangumi (周更表) - 强力修复
+// ==========================================
+async function fetchBangumiCalendar(weekday, page) {
+    const pageSize = 20;
+    let targetDayId = parseInt(weekday);
+    if (weekday === "today") {
+        const today = new Date();
+        const jsDay = today.getDay();
+        targetDayId = jsDay === 0 ? 7 : jsDay;
     }
+    const dayName = getWeekdayName(targetDayId);
 
-    const finalItems = mixedList.slice(0, 20);
-    if (finalItems.length === 0) return [{ id: "err", type: "text", title: "无推荐结果" }];
-    return finalItems;
-}
-
-// =========================================================================
-// 3. 业务逻辑：那年今日
-// =========================================================================
-
-async function loadHistoryToday(params = {}) {
-    const { region = "Global", sortOrder = "time_desc" } = params;
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-
-    const yearsAgo = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
-    const targetYears = yearsAgo.map(diff => ({ year: currentYear - diff, diff: diff }));
-
-    let allMovies = [];
-    const batchRequest = async (years) => {
-        const promises = years.map(yObj => fetchMovieForDate(yObj.year, month, day, region, yObj.diff));
-        const results = await Promise.all(promises);
-        results.forEach(list => { if (list) allMovies = allMovies.concat(list); });
-    };
-
-    await batchRequest(targetYears.slice(0, 5));
-    await batchRequest(targetYears.slice(5, 10));
-    await batchRequest(targetYears.slice(10));
-
-    if (allMovies.length === 0) return [{ id: "empty", type: "text", title: "今日无大事" }];
-
-    allMovies.sort((a, b) => {
-        if (sortOrder === "time_desc") return parseInt(b.yearStr) - parseInt(a.yearStr);
-        if (sortOrder === "vote_desc") return parseFloat(b.rating) - parseFloat(a.rating);
-        return b.popularity - a.popularity;
-    });
-
-    return allMovies.slice(0, 20).map(item => {
-        const genreText = getGenreText(item.genre_ids);
-        return buildItem({
-            id: item.id, tmdbId: item.id, type: "movie",
-            title: item.title, year: item.yearStr, poster: item.poster_path, backdrop: item.backdrop_path,
-            rating: item.rating, genreText: genreText,
-            subTitle: `TMDB ${item.rating}`,
-            desc: `🏆 ${item.diff}周年纪念 | ${item.overview || "暂无简介"}`
-        });
-    });
-}
-
-// =========================================================================
-// 4. 辅助函数
-// =========================================================================
-
-// A. 搜索
-async function searchTmdb(query, type) {
-    const q = query.replace(/第[一二三四五六七八九十\d]+[季章]/g, "").trim();
     try {
-        const res = await Widget.tmdb.get(`/search/${type}`, { params: { query: encodeURIComponent(q), language: "zh-CN" } });
+        const res = await Widget.http.get("https://api.bgm.tv/calendar");
+        const data = res.data || [];
+        const dayData = data.find(d => d.weekday && d.weekday.id === targetDayId);
+
+        if (!dayData || !dayData.items || dayData.items.length === 0) {
+            return page === 1 ? [{ id: "empty", type: "text", title: "暂无更新" }] : [];
+        }
+
+        const allItems = dayData.items;
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        if (start >= allItems.length) return [];
+        const pageItems = allItems.slice(start, end);
+
+        const promises = pageItems.map(async (item) => {
+            const titleCn = item.name_cn || "";
+            const titleJp = item.name || "";
+            const title = titleCn || titleJp; // 优先中文名用于展示
+            
+            // 初始数据 (Bangumi)
+            let finalItem = {
+                id: `bgm_${item.id}`,
+                tmdbId: 0,
+                type: "link", // 默认降级为 link，防止无法点击
+                link: `https://bgm.tv/subject/${item.id}`, // 跳转 Bangumi 网页
+                title: title,
+                year: "",
+                poster: item.images?.large || item.images?.common || "",
+                rating: item.rating?.score?.toFixed(1) || "0.0",
+                genreText: "动画",
+                subTitle: titleJp !== title ? titleJp : "", // 副标题显示原名
+                desc: item.summary
+            };
+
+            // 强力匹配 TMDB
+            // 策略：中文名 -> 原名 -> 清洗后的中文名 (去掉第x季) -> 清洗后的原名
+            const cleanCn = cleanTitle(titleCn);
+            const cleanJp = cleanTitle(titleJp);
+            
+            let tmdbItem = await searchTmdbInternal(titleCn);
+            if (!tmdbItem && titleJp) tmdbItem = await searchTmdbInternal(titleJp);
+            if (!tmdbItem && cleanCn !== titleCn) tmdbItem = await searchTmdbInternal(cleanCn);
+            if (!tmdbItem && cleanJp !== titleJp) tmdbItem = await searchTmdbInternal(cleanJp);
+
+            if (tmdbItem) {
+                // 匹配成功！升级为 TMDB Item
+                finalItem.type = "tmdb";
+                finalItem.id = String(tmdbItem.id);
+                finalItem.tmdbId = tmdbItem.id;
+                finalItem.poster = tmdbItem.poster_path; // 这里的相对路径会在 buildItem 里处理
+                finalItem.backdrop = tmdbItem.backdrop_path;
+                finalItem.rating = tmdbItem.vote_average ? tmdbItem.vote_average.toFixed(1) : finalItem.rating;
+                finalItem.year = (tmdbItem.first_air_date || "").substring(0, 4);
+                if (tmdbItem.overview) finalItem.desc = tmdbItem.overview;
+                finalItem.genreText = getGenreText(tmdbItem.genre_ids);
+                // 标题修正：使用 TMDB 的规范中文名
+                finalItem.title = tmdbItem.name || finalItem.title;
+            }
+            
+            // 强制加上周几前缀
+            const buildRes = buildItem(finalItem);
+            buildRes.genreTitle = `${dayName} • ${buildRes.genreTitle.split(" • ").pop() || "动画"}`;
+            
+            return buildRes;
+        });
+
+        return await Promise.all(promises);
+    } catch (e) { return [{ id: "err", type: "text", title: "Bangumi 加载失败" }]; }
+}
+
+// ==========================================
+// 工具函数
+// ==========================================
+
+function cleanTitle(title) {
+    if (!title) return "";
+    // 去掉 "第x季", "Season x", "Part x"
+    return title.replace(/第[一二三四五六七八九十\d]+[季章]/g, "")
+                .replace(/Season \d+/i, "")
+                .replace(/Part \d+/i, "")
+                .trim();
+}
+
+async function searchTmdbInternal(query) {
+    if (!query) return null;
+    try {
+        const res = await Widget.tmdb.get("/search/tv", { params: { query: query, language: "zh-CN", page: 1 } });
         return (res.results || [])[0];
     } catch (e) { return null; }
 }
 
-// B. 那年今日
-async function fetchMovieForDate(year, month, day, region, diff) {
-    const dateStr = `${year}-${month}-${day}`;
-    const queryParams = { language: "zh-CN", include_adult: false, page: 1, "primary_release_date.gte": dateStr, "primary_release_date.lte": dateStr };
-    if (region === "Global") queryParams["vote_count.gte"] = 50;
-    else { queryParams["region"] = region; queryParams["vote_count.gte"] = 10; }
-
+// Bilibili 和 MAL 的逻辑 (保持原样，省略以节省篇幅，请直接复用上一版)
+// 确保 fetchBilibiliRankSafe 和 fetchMalData 都在
+async function fetchBilibiliRankSafe(type, page) {
+    // ... (复用上一版)
+    // 记得在 searchTmdbInternal 时也使用 cleanTitle 增强匹配
+    const url = `https://api.bilibili.com/pgc/web/rank/list?day=3&season_type=${type}`;
     try {
-        const res = await Widget.tmdb.get("/discover/movie", { params: queryParams });
-        const data = res || {};
-        if (!data.results) return [];
-        return data.results.map(m => ({
-            id: m.id, title: m.title, poster_path: m.poster_path, backdrop_path: m.backdrop_path,
-            rating: m.vote_average ? m.vote_average.toFixed(1) : "0.0", overview: m.overview,
-            yearStr: String(year), diff: diff, popularity: m.popularity, genre_ids: m.genre_ids || []
+        const res = await Widget.http.get(url, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://www.bilibili.com/" } });
+        const data = res.data || {};
+        const fullList = data.result?.list || data.data?.list || [];
+        const start = (page - 1) * 20;
+        const end = start + 20;
+        if (start >= fullList.length) return [];
+        
+        return await Promise.all(fullList.slice(start, end).map(async (item, i) => {
+            let finalItem = {
+                id: `bili_${item.season_id}`, tmdbId: 0, type: "tv",
+                title: item.title, year: "", poster: item.cover,
+                rating: "0.0", genreText: "动画", subTitle: `${start+i+1}. ${item.new_ep?.index_show || "热播"}`, desc: item.desc
+            };
+            const tmdb = await searchTmdbInternal(cleanTitle(item.title));
+            if (tmdb) mergeTmdb(finalItem, tmdb);
+            return buildItem(finalItem);
         }));
     } catch (e) { return []; }
 }
 
-// C. Trakt
-async function fetchLastWatched(username, type, clientId) {
-    const traktType = type === "tv" ? "shows" : "movies";
-    const url = `https://api.trakt.tv/users/${username}/history/${traktType}?limit=1`;
+async function fetchMalData(filterType, page) {
+    // ... (复用上一版)
+    let url = `https://api.jikan.moe/v4/top/anime?page=${page}`;
+    if (filterType !== "top") url += `&filter=${filterType}`;
     try {
-        const res = await Widget.http.get(url, { headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": clientId }, timeout: 5000 });
-        const data = res.data || [];
-        if (data.length > 0) {
-            const work = data[0].show || data[0].movie;
-            if (work?.ids?.tmdb) return { tmdbId: work.ids.tmdb, title: work.title };
-        }
-    } catch (e) {}
-    return null;
-}
-
-async function fetchUniqueHistory(username, clientId) {
-    const url = `https://api.trakt.tv/users/${username}/history/shows?limit=100`;
-    try {
-        const res = await Widget.http.get(url, { headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": clientId }, timeout: 5000 });
-        const data = res.data || [];
-        const uniqueMap = new Map();
-        for (const item of data) {
-            const show = item.show;
-            if (show?.ids?.tmdb && !uniqueMap.has(show.ids.tmdb)) uniqueMap.set(show.ids.tmdb, { tmdbId: show.ids.tmdb, title: show.title });
-        }
-        return Array.from(uniqueMap.values());
+        const res = await Widget.http.get(url);
+        const list = (res.data || {}).data || [];
+        if (list.length === 0) return [];
+        return await Promise.all(list.map(async (item, i) => {
+            let finalItem = {
+                id: `mal_${item.mal_id}`, tmdbId: 0, type: "tv",
+                title: item.title_english || item.title, year: item.year ? String(item.year) : "",
+                poster: item.images?.jpg?.large_image_url, rating: item.score, genreText: "动画",
+                subTitle: `MAL ★${item.score}`, desc: item.synopsis
+            };
+            const tmdb = await searchTmdbInternal(cleanTitle(item.title_english || item.title));
+            if (tmdb) mergeTmdb(finalItem, tmdb);
+            return buildItem(finalItem);
+        }));
     } catch (e) { return []; }
 }
 
-function getRandomSeeds(array, count) {
-    const shuffled = [...array].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count);
+function mergeTmdb(target, source) {
+    target.id = String(source.id);
+    target.tmdbId = source.id;
+    target.type = "tmdb"; // 升级类型
+    target.poster = source.poster_path; // 相对路径
+    target.backdrop = source.backdrop_path;
+    target.rating = source.vote_average ? source.vote_average.toFixed(1) : target.rating;
+    target.year = (source.first_air_date || "").substring(0, 4);
+    if (source.overview) target.desc = source.overview;
+    target.genreText = getGenreText(source.genre_ids);
 }
 
-// D. TMDB 推荐/随机
-async function fetchTmdbRecommendations(id, type, page) {
-    try {
-        const res = await Widget.tmdb.get(`/${type}/${id}/recommendations`, { params: { language: "zh-CN", page: page } });
-        return (res.results || []);
-    } catch (e) { return []; }
+function getWeekdayName(id) {
+    const map = { 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日" };
+    return map[id] || "";
 }
-
-async function fetchRandomTmdb(type, page) {
-    const randomPage = Math.floor(Math.random() * 20) + (page || 1); // 结合 page 增加随机性
-    const year = Math.floor(Math.random() * (2024 - 2015 + 1)) + 2015;
-    const queryParams = { language: "zh-CN", sort_by: "popularity.desc", include_adult: false, "vote_count.gte": 100, page: randomPage };
-    if (type === "movie") queryParams["primary_release_year"] = year; else queryParams["first_air_date_year"] = year;
-
-    try {
-        const res = await Widget.tmdb.get(`/discover/${type}`, { params: queryParams });
-        let items = (res.results || []);
-        for (let i = items.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [items[i], items[j]] = [items[j], items[i]];
-        }
-        return items;
-    } catch (e) { return []; }
-}
-
-async function fetchTmdbRecsForSeed(seedItem) {
-    try {
-        const res = await Widget.tmdb.get(`/tv/${seedItem.tmdbId}/recommendations`, { params: { language: "zh-CN", page: 1 } });
-        const data = res || {};
-        if (!data.results) return [];
-        return data.results.slice(0, 5).map(item => {
-            const genreText = getGenreText(item.genre_ids);
-            const year = (item.first_air_date || "").substring(0, 4);
-            const score = item.vote_average ? item.vote_average.toFixed(1) : "0.0";
-            return buildItem({
-                id: item.id, tmdbId: item.id, type: "tv",
-                title: item.name || item.title, year: year, poster: item.poster_path, backdrop: item.backdrop_path, rating: score, genreText: genreText,
-                subTitle: `✨ 源于: ${seedItem.title}`,
-                desc: `评分: ${score} | ${item.overview || "暂无简介"}`
-            });
-        });
-    } catch (e) { return []; }
-              }
