@@ -2,8 +2,8 @@ WidgetMetadata = {
     id: "global_tv_calendar_ultimate",
     title: "全球追剧时刻表",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-    description: "聚合全球剧集更新与综艺排期，支持国家筛选。",
-    version: "2.0.6",
+    description: "聚合全球剧集更新表&综艺排期&bangumi动漫周更表。",
+    version: "2.0.7",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
 
@@ -11,14 +11,17 @@ WidgetMetadata = {
     globalParams: [
         {
             name: "traktClientId",
-            title: " trakt client id(选填，填写后时间更准)",
+            title: "Trakt Client ID (选填)",
             type: "input",
-            description: "不填则使用内置公用 ID (推荐)。",
+            description: "综艺模块专用，不填则使用公共 ID。",
             value: ""
         }
     ],
 
     modules: [
+        // ===========================================
+        // 模块 1: 追剧日历 (Drama) - 保持原样
+        // ===========================================
         {
             title: "追剧日历 (Drama)",
             functionName: "loadTvCalendar",
@@ -54,6 +57,10 @@ WidgetMetadata = {
                 { name: "page", title: "页码", type: "page" }
             ]
         },
+
+        // ===========================================
+        // 模块 2: 综艺时刻 (Variety) - 保持原样
+        // ===========================================
         {
             title: "综艺时刻 (Variety)",
             functionName: "loadVarietyCalendar",
@@ -85,15 +92,43 @@ WidgetMetadata = {
                     ]
                 }
             ]
+        },
+
+        // ===========================================
+        // 模块 3: 动漫周更 (Anime) - 新增
+        // ===========================================
+        {
+            title: "动漫周更 (Anime)",
+            functionName: "loadBangumiCalendar",
+            type: "list",
+            cacheDuration: 3600,
+            params: [
+                {
+                    name: "weekday",
+                    title: "选择日期",
+                    type: "enumeration",
+                    value: "today",
+                    enumOptions: [
+                        { title: "📅 今天", value: "today" },
+                        { title: "周一 (月)", value: "1" },
+                        { title: "周二 (火)", value: "2" },
+                        { title: "周三 (水)", value: "3" },
+                        { title: "周四 (木)", value: "4" },
+                        { title: "周五 (金)", value: "5" },
+                        { title: "周六 (土)", value: "6" },
+                        { title: "周日 (日)", value: "7" }
+                    ]
+                },
+                { name: "page", title: "页码", type: "page" }
+            ]
         }
     ]
 };
 
 // =========================================================================
-// 0. 通用配置
+// 0. 通用工具与字典
 // =========================================================================
 
-// Kodi 社区公用 Key，稳定性极高
 const DEFAULT_TRAKT_ID = "003666572e92c4331002a28114387693994e43f5454659f81640a232f08a5996";
 
 const GENRE_MAP = {
@@ -126,132 +161,7 @@ function buildItem({ id, tmdbId, type, title, year, poster, backdrop, rating, ge
 }
 
 // =========================================================================
-// 1. 综艺时刻 (Variety) - 智能双擎
-// =========================================================================
-
-async function loadVarietyCalendar(params = {}) {
-    const { region = "cn", mode = "today", traktClientId } = params;
-    
-    // 智能 Key 选择：用户填了就用用户的，没填就用内置的
-    const clientId = traktClientId && traktClientId.length > 50 ? traktClientId : DEFAULT_TRAKT_ID;
-
-    // A. 强制热播模式 (直接走 TMDB)
-    if (mode === "trending") {
-        return await fetchTmdbVariety(region, null); 
-    }
-
-    // B. Trakt 优先模式
-    const dateStr = getSafeDate(mode); 
-    const countryParam = region === "global" ? "" : region; 
-    
-    // 综艺类型：Reality, Game Show, Talk Show
-    const traktUrl = `https://api.trakt.tv/calendars/all/shows/${dateStr}/1?genres=reality,game-show,talk-show${countryParam ? `&countries=${countryParam}` : ''}`;
-
-    try {
-        console.log(`[Trakt] Fetching: ${traktUrl} (Key: ${clientId.substring(0,5)}...)`);
-        
-        const res = await Widget.http.get(traktUrl, {
-            headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": clientId }
-        });
-        const data = res.data || [];
-
-        // 如果 Trakt 有数据，直接使用
-        if (Array.isArray(data) && data.length > 0) {
-            const promises = data.map(async (item) => {
-                if (!item.show.ids.tmdb) return null;
-                return await fetchTmdbDetail(item.show.ids.tmdb, item);
-            });
-            return (await Promise.all(promises)).filter(Boolean);
-        }
-    } catch (e) {
-        console.log("[Trakt] Failed, switching to TMDB...");
-    }
-
-    // C. 兜底模式 (Trakt 无数据/失败时，走 TMDB 精准日期)
-    return await fetchTmdbVariety(region, dateStr);
-}
-
-// TMDB 综艺获取
-async function fetchTmdbVariety(region, dateStr) {
-    const queryParams = {
-        language: "zh-CN",
-        sort_by: "popularity.desc", 
-        page: 1,
-        with_genres: "10764|10767", // Reality | Talk
-        include_null_first_air_dates: false,
-        timezone: "Asia/Shanghai" 
-    };
-
-    if (region !== "global") {
-        queryParams.with_origin_country = region.toUpperCase();
-    }
-
-    if (dateStr) {
-        // 如果指定了日期，尝试筛选 air_date
-        // 注意：TMDB Discover 对单集 air_date 筛选支持有限，这里作为尽力而为的兜底
-        queryParams["air_date.gte"] = dateStr;
-        queryParams["air_date.lte"] = dateStr;
-    } else {
-        queryParams.sort_by = "first_air_date.desc";
-    }
-
-    try {
-        const res = await Widget.tmdb.get("/discover/tv", { params: queryParams });
-        const data = res || {};
-        
-        if (!data.results || data.results.length === 0) {
-            return [{ id: "empty", type: "text", title: "暂无综艺更新", subTitle: dateStr ? `${dateStr} 无数据` : "暂无数据" }];
-        }
-
-        return data.results.map(item => {
-            const year = (item.first_air_date || "").substring(0, 4);
-            const genreText = getGenreText(item.genre_ids);
-            
-            // 构造日期标签
-            let dateLabel = "近期热播";
-            if (dateStr) dateLabel = `📅 更新: ${dateStr}`;
-
-            return buildItem({
-                id: item.id, tmdbId: item.id, type: "tv",
-                title: item.name, 
-                year: year, 
-                poster: item.poster_path, 
-                backdrop: item.backdrop_path,
-                rating: item.vote_average?.toFixed(1),
-                genreText: genreText,
-                subTitle: dateLabel, 
-                desc: item.overview
-            });
-        });
-
-    } catch (e) { return [{ id: "err", type: "text", title: "TMDB 错误" }]; }
-}
-
-// Trakt 详情转 TMDB
-async function fetchTmdbDetail(tmdbId, traktItem) {
-    try {
-        const d = await Widget.tmdb.get(`/tv/${tmdbId}`, { params: { language: "zh-CN" } });
-        if (!d) return null;
-
-        const ep = traktItem.episode;
-        const airTime = traktItem.first_aired.split("T")[0];
-        const genreText = (d.genres || []).map(g => g.name).slice(0, 2).join(" / ");
-
-        return buildItem({
-            id: d.id, tmdbId: d.id, type: "tv",
-            title: d.name || traktItem.show.title,
-            year: (d.first_air_date || "").substring(0, 4),
-            poster: d.poster_path, backdrop: d.backdrop_path,
-            rating: d.vote_average?.toFixed(1),
-            genreText: genreText,
-            subTitle: `S${ep.season}E${ep.number} · ${ep.title || "更新"}`, // Trakt 精准单集
-            desc: d.overview
-        });
-    } catch (e) { return null; }
-}
-
-// =========================================================================
-// 2. 业务逻辑：追剧日历 (Drama)
+// 1. 业务逻辑：追剧日历 (Drama)
 // =========================================================================
 
 async function loadTvCalendar(params = {}) {
@@ -307,6 +217,121 @@ async function loadTvCalendar(params = {}) {
     } catch (e) { return [{ id: "err", type: "text", title: "网络错误" }]; }
 }
 
+// =========================================================================
+// 2. 业务逻辑：综艺时刻 (Variety)
+// =========================================================================
+
+async function loadVarietyCalendar(params = {}) {
+    const { region = "cn", mode = "today", traktClientId } = params;
+    const clientId = traktClientId || DEFAULT_TRAKT_ID;
+
+    if (mode === "trending") {
+        return await fetchTmdbVariety(region, null); 
+    }
+
+    const dateStr = getSafeDate(mode); 
+    const countryParam = region === "global" ? "" : region; 
+    const traktUrl = `https://api.trakt.tv/calendars/all/shows/${dateStr}/1?genres=reality,game-show,talk-show${countryParam ? `&countries=${countryParam}` : ''}`;
+
+    try {
+        const res = await Widget.http.get(traktUrl, {
+            headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": clientId }
+        });
+        const data = res.data || [];
+
+        if (Array.isArray(data) && data.length > 0) {
+            const promises = data.map(async (item) => {
+                if (!item.show.ids.tmdb) return null;
+                return await fetchTmdbDetail(item.show.ids.tmdb, item);
+            });
+            return (await Promise.all(promises)).filter(Boolean);
+        }
+    } catch (e) {}
+
+    return await fetchTmdbVariety(region, dateStr);
+}
+
+// =========================================================================
+// 3. 业务逻辑：动漫周更 (Anime) - 新增
+// =========================================================================
+
+async function loadBangumiCalendar(params = {}) {
+    const { weekday = "today", page = 1 } = params;
+    const pageSize = 20;
+
+    let targetDayId = parseInt(weekday);
+    if (weekday === "today") {
+        const today = new Date();
+        const jsDay = today.getDay();
+        targetDayId = jsDay === 0 ? 7 : jsDay;
+    }
+    const dayName = getWeekdayName(targetDayId);
+
+    try {
+        const res = await Widget.http.get("https://api.bgm.tv/calendar");
+        const data = res.data || [];
+        const dayData = data.find(d => d.weekday && d.weekday.id === targetDayId);
+
+        if (!dayData || !dayData.items || dayData.items.length === 0) {
+            return page === 1 ? [{ id: "empty", type: "text", title: "暂无更新" }] : [];
+        }
+
+        // 本地分页
+        const allItems = dayData.items;
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        if (start >= allItems.length) return [];
+        const pageItems = allItems.slice(start, end);
+
+        const promises = pageItems.map(async (item) => {
+            const title = item.name_cn || item.name;
+            const subTitle = item.name;
+            const cover = item.images ? (item.images.large || item.images.common) : "";
+            
+            // 初始 Item (Bangumi 数据)
+            let finalItem = {
+                id: `bgm_${item.id}`,
+                tmdbId: 0, // 初始无 TMDB ID
+                type: "tmdb",
+                mediaType: "tv",
+                title: title,
+                year: "",
+                poster: cover,
+                backdrop: "",
+                rating: item.rating?.score?.toFixed(1) || "0.0",
+                genreText: "动画",
+                subTitle: subTitle,
+                desc: item.summary
+            };
+
+            // TMDB 匹配
+            const tmdbItem = await searchTmdbBestMatch(title, subTitle);
+            if (tmdbItem) {
+                mergeTmdb(finalItem, tmdbItem);
+                // 更新 GenreTitle (Bangumi 周几 + TMDB 类型)
+                const genreText = getGenreText(tmdbItem.genre_ids);
+                finalItem.genreText = genreText;
+            }
+            
+            // 手动添加周几前缀
+            finalItem.genreTitle = `${dayName} • ${finalItem.genreText || "动画"}`;
+            
+            // 转为标准格式
+            return buildItem(finalItem);
+        });
+
+        return await Promise.all(promises);
+
+    } catch (e) {
+        return [{ id: "err", type: "text", title: "加载失败", subTitle: e.message }];
+    }
+}
+
+// =========================================================================
+// 4. 辅助函数
+// =========================================================================
+
+// --- 日期相关 ---
 function calculateDates(mode) {
     const today = new Date();
     const toStr = (d) => d.toISOString().split('T')[0];
@@ -331,4 +356,89 @@ function getSafeDate(mode) {
     const d = new Date();
     if (mode === "tomorrow") d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
+}
+
+function getWeekdayName(id) {
+    const map = { 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日" };
+    return map[id] || "";
+}
+
+// --- TMDB / Trakt 相关 ---
+async function fetchTmdbVariety(region, dateStr) {
+    const queryParams = {
+        language: "zh-CN",
+        sort_by: "popularity.desc", 
+        page: 1,
+        with_genres: "10764|10767", 
+        include_null_first_air_dates: false,
+        timezone: "Asia/Shanghai" 
+    };
+    if (region !== "global") queryParams.with_origin_country = region.toUpperCase();
+    if (dateStr) {
+        queryParams["air_date.gte"] = dateStr;
+        queryParams["air_date.lte"] = dateStr;
+    } else {
+        queryParams.sort_by = "first_air_date.desc";
+    }
+
+    try {
+        const res = await Widget.tmdb.get("/discover/tv", { params: queryParams });
+        const data = res || {};
+        if (!data.results) return [{ id: "empty", type: "text", title: "暂无更新" }];
+
+        return data.results.map(item => {
+            const year = (item.first_air_date || "").substring(0, 4);
+            const genreText = getGenreText(item.genre_ids);
+            return buildItem({
+                id: item.id, tmdbId: item.id, type: "tv",
+                title: item.name, year: year, poster: item.poster_path, backdrop: item.backdrop_path,
+                rating: item.vote_average?.toFixed(1), genreText: genreText,
+                subTitle: dateStr ? `📅 更新: ${dateStr}` : "近期热播", desc: item.overview
+            });
+        });
+    } catch (e) { return [{ id: "err", type: "text", title: "TMDB 错误" }]; }
+}
+
+async function fetchTmdbDetail(tmdbId, traktItem) {
+    try {
+        const d = await Widget.tmdb.get(`/tv/${tmdbId}`, { params: { language: "zh-CN" } });
+        if (!d) return null;
+        const ep = traktItem.episode;
+        const genreText = getGenreText(d.genres ? d.genres.map(g=>g.id) : []);
+        return buildItem({
+            id: d.id, tmdbId: d.id, type: "tv",
+            title: d.name || traktItem.show.title,
+            year: (d.first_air_date || "").substring(0, 4),
+            poster: d.poster_path, backdrop: d.backdrop_path,
+            rating: d.vote_average?.toFixed(1), genreText: genreText,
+            subTitle: `S${ep.season}E${ep.number} · ${ep.title || "更新"}`,
+            desc: d.overview
+        });
+    } catch (e) { return null; }
+}
+
+async function searchTmdbBestMatch(query1, query2) {
+    let res = await searchTmdb(query1);
+    if (!res && query2) res = await searchTmdb(query2);
+    return res;
+}
+
+async function searchTmdb(query) {
+    if (!query) return null;
+    const cleanQuery = query.replace(/第[一二三四五六七八九十\d]+[季章]/g, "").trim();
+    try {
+        const res = await Widget.tmdb.get("/search/tv", { params: { query: cleanQuery, language: "zh-CN", page: 1 } });
+        return (res.results || [])[0];
+    } catch (e) { return null; }
+}
+
+function mergeTmdb(target, source) {
+    target.id = String(source.id);
+    target.tmdbId = source.id;
+    if (source.poster_path) target.posterPath = source.poster_path; // 这里只需传 path，buildItem 会拼接
+    if (source.backdrop_path) target.backdropPath = source.backdrop_path;
+    target.rating = source.vote_average ? source.vote_average.toFixed(1) : target.rating;
+    target.year = (source.first_air_date || "").substring(0, 4);
+    if (source.overview) target.desc = source.overview;
+    target.genre_ids = source.genre_ids; // 传递 ids 给 buildItem 解析
 }
