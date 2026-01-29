@@ -1,276 +1,335 @@
 WidgetMetadata = {
-    id: "vod_stream_makka",
-    title: "全能播放源 (聚合)",
+    id: "makka_global_tv_calendar_fix",
+    title: "全球追剧时刻表 (综艺修复)",
     author: "MakkaPakka",
-    description: "聚合 非凡/量子/厂长/Libvio/AGE，提供全网直连播放源。",
-    version: "4.0.0",
+    description: "聚合全球剧集更新与综艺排期。修复综艺更新日期不准问题。",
+    version: "2.1.0",
     requiredVersion: "0.0.1",
-    
-    // 0. 全局免 Key
-    globalParams: [],
+    site: "https://www.themoviedb.org",
+
+    // 1. 全局参数 (仅 Trakt 选填)
+    globalParams: [
+        {
+            name: "traktClientId",
+            title: "Trakt Client ID (选填)",
+            type: "input",
+            description: "综艺模块专用，不填则使用公共 ID。",
+            value: ""
+        }
+    ],
 
     modules: [
+        // ===========================================
+        // 模块 1: 追剧日历 (电视剧) - 保持原样
+        // ===========================================
         {
-            id: "loadResource",
-            title: "加载资源",
-            functionName: "loadResource",
-            type: "stream", // 关键：声明为 stream 类型，Forward 才会把它识别为播放源
-            params: [] 
+            title: "追剧日历 (Drama)",
+            functionName: "loadTvCalendar",
+            type: "list",
+            cacheDuration: 3600,
+            params: [
+                {
+                    name: "mode",
+                    title: "时间范围",
+                    type: "enumeration",
+                    value: "update_today",
+                    enumOptions: [
+                        { title: "今日更新", value: "update_today" },
+                        { title: "明日首播", value: "premiere_tomorrow" },
+                        { title: "7天内首播", value: "premiere_week" },
+                        { title: "30天内首播", value: "premiere_month" }
+                    ]
+                },
+                {
+                    name: "region",
+                    title: "地区偏好",
+                    type: "enumeration",
+                    value: "Global",
+                    enumOptions: [
+                        { title: "全球聚合", value: "Global" },
+                        { title: "美国 (US)", value: "US" },
+                        { title: "日本 (JP)", value: "JP" },
+                        { title: "韩国 (KR)", value: "KR" },
+                        { title: "中国 (CN)", value: "CN" },
+                        { title: "英国 (GB)", value: "GB" }
+                    ]
+                },
+                { name: "page", title: "页码", type: "page" }
+            ]
+        },
+
+        // ===========================================
+        // 模块 2: 综艺时刻 (Variety) - 核心修复
+        // ===========================================
+        {
+            title: "综艺时刻 (Variety)",
+            functionName: "loadVarietyCalendar",
+            type: "list",
+            cacheDuration: 3600,
+            params: [
+                {
+                    name: "region",
+                    title: "综艺地区",
+                    type: "enumeration",
+                    value: "cn",
+                    enumOptions: [
+                        { title: "🇨🇳 国产综艺", value: "cn" },
+                        { title: "🇰🇷 韩国综艺", value: "kr" },
+                        { title: "🇺🇸 欧美综艺", value: "us" },
+                        { title: "🇯🇵 日本综艺", value: "jp" },
+                        { title: "🌍 全球热门", value: "global" }
+                    ]
+                },
+                {
+                    name: "mode",
+                    title: "时间范围",
+                    type: "enumeration",
+                    value: "today",
+                    enumOptions: [
+                        { title: "今日更新", value: "today" },
+                        { title: "明日预告", value: "tomorrow" },
+                        { title: "近期热播 (不限时间)", value: "trending" }
+                    ]
+                }
+            ]
         }
     ]
 };
 
-// ==========================================
-// 1. 核心分发逻辑
-// ==========================================
+const DEFAULT_TRAKT_ID = "003666572e92c4331002a28114387693994e43f5454659f81640a232f08a5996";
 
-async function loadResource(params) {
-    // Forward 传入的标准参数: seriesName, season, episode, title(电影)
-    const { seriesName, type = 'tv', season, episode, title } = params;
+const GENRE_MAP = {
+    10759: "动作冒险", 16: "动画", 35: "喜剧", 80: "犯罪", 99: "纪录片",
+    18: "剧情", 10751: "家庭", 10762: "儿童", 9648: "悬疑", 10763: "新闻",
+    10764: "真人秀", 10765: "科幻奇幻", 10766: "肥皂剧", 10767: "脱口秀",
+    10768: "战争政治", 37: "西部"
+};
+
+function getGenreText(ids) {
+    if (!ids || !Array.isArray(ids)) return "";
+    return ids.map(id => GENRE_MAP[id]).filter(Boolean).slice(0, 2).join(" / ");
+}
+
+function buildItem({ id, tmdbId, type, title, year, poster, backdrop, rating, genreText, subTitle, desc }) {
+    return {
+        id: String(id),
+        tmdbId: parseInt(tmdbId),
+        type: "tmdb",
+        mediaType: type,
+        title: title,
+        genreTitle: [year, genreText].filter(Boolean).join(" • "), 
+        subTitle: subTitle,
+        posterPath: poster ? `https://image.tmdb.org/t/p/w500${poster}` : "",
+        backdropPath: backdrop ? `https://image.tmdb.org/t/p/w780${backdrop}` : "",
+        description: desc || "暂无简介",
+        rating: rating,
+        year: year
+    };
+}
+
+// =========================================================================
+// 1. 业务逻辑：追剧日历 (Drama) - 保持原样
+// =========================================================================
+
+async function loadTvCalendar(params = {}) {
+    const { mode = "update_today", region = "Global", page = 1 } = params;
+    const dates = calculateDates(mode); // 计算日期范围
+    const isPremiere = mode.includes("premiere");
     
-    // 搜索关键词处理
-    // 剧集优先用 seriesName，电影用 title
-    let queryName = seriesName || title;
-    
-    // 如果是第二季，尝试加上季数优化搜索 (如 "庆余年 第二季")
-    // 但很多源站命名不规范，有时候搜纯名反而更准，这里我们并发搜两种
-    let queries = [queryName];
-    if (season && season > 1) {
-        queries.push(`${queryName} 第${season}季`);
-        queries.push(`${queryName} ${season}`);
+    const queryParams = {
+        language: "zh-CN",
+        sort_by: "popularity.desc",
+        include_null_first_air_dates: false,
+        page: page,
+        timezone: "Asia/Shanghai"
+    };
+
+    const dateField = isPremiere ? "first_air_date" : "air_date";
+    queryParams[`${dateField}.gte`] = dates.start;
+    queryParams[`${dateField}.lte`] = dates.end;
+
+    if (region !== "Global") {
+        queryParams.with_origin_country = region;
+        const langMap = { "JP": "ja", "KR": "ko", "CN": "zh", "GB": "en", "US": "en" };
+        if (langMap[region]) queryParams.with_original_language = langMap[region];
     }
 
-    console.log(`[Stream] Searching: ${queries.join(" | ")} (S${season}E${episode})`);
+    try {
+        const res = await Widget.tmdb.get("/discover/tv", { params: queryParams });
+        const data = res || {};
 
-    // 并发任务池
-    const tasks = [];
+        if (!data.results || data.results.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无更新", subTitle: `${region} 在 ${dates.start} 无数据` }] : [];
 
-    // 1. VOD 采集站 (非凡/量子) - 速度快，最稳
-    tasks.push(searchVodCms(queryName, season, episode));
-
-    // 2. 精品站 (厂长/Libvio) - 画质好
-    // 避免搜索词太长导致搜不到，精简搜索
-    tasks.push(searchCzzy(queryName, season, episode));
-    tasks.push(searchLibvio(queryName, season, episode));
-
-    // 3. 动漫站 (AGE) - 仅当可能是动漫时搜
-    // 简单判断：如果 type 是 tv 或者关键词像动漫
-    tasks.push(searchAge(queryName, season, episode));
-
-    const results = await Promise.all(tasks);
-    
-    // 扁平化并去重
-    const flatResults = results.flat().filter(item => item && item.url);
-    
-    // 去重逻辑 (URL 去重)
-    const uniqueMap = new Map();
-    flatResults.forEach(item => {
-        if (!uniqueMap.has(item.url)) {
-            uniqueMap.set(item.url, item);
-        }
-    });
-
-    return Array.from(uniqueMap.values());
-}
-
-// ==========================================
-// 2. VOD CMS 解析 (非凡/量子)
-// ==========================================
-const CMS_SITES = [
-    { name: "非凡", url: "http://cj.ffzyapi.com/api.php/provide/vod/" },
-    { name: "量子", url: "https://cj.lziapi.com/api.php/provide/vod/" }
-];
-
-async function searchVodCms(keyword, season, episode) {
-    // 针对 CMS，我们可以直接搜纯名
-    const tasks = CMS_SITES.map(async (site) => {
-        try {
-            const url = `${site.url}?ac=detail&wd=${encodeURIComponent(keyword)}`;
-            const res = await Widget.http.get(url);
-            const data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+        return data.results.map(item => {
+            const dateStr = item[dateField] || "";
+            const shortDate = dateStr.slice(5); 
+            const year = (item.first_air_date || "").substring(0, 4);
+            const genreText = getGenreText(item.genre_ids);
             
-            if (!data || !data.list) return [];
+            let subInfo = [];
+            if (mode !== "update_today" && shortDate) subInfo.push(`📅 ${shortDate}`);
+            else if (mode === "update_today") subInfo.push("🆕 今日");
+            if (item.original_name && item.original_name !== item.name) subInfo.push(item.original_name);
 
-            // 过滤：找到最匹配的那个剧
-            // 简单逻辑：如果是剧集，尝试匹配 "第二季" 等字眼
-            // 这里为了简单，我们取所有包含关键词的结果
-            
-            let resources = [];
-            data.list.forEach(item => {
-                // 解析播放列表 "第1集$url#第2集$url..."
-                const playUrl = item.vod_play_url;
-                const episodes = playUrl.split("#");
-                
-                // 寻找目标集数
-                const targetEp = episode ? episode.toString() : "1";
-                
-                // 遍历集数
-                episodes.forEach(epStr => {
-                    const [epName, epLink] = epStr.split("$");
-                    // 匹配集数 (简单包含匹配)
-                    // "第1集", "01", "1"
-                    if (season) { // 是剧集
-                        const num = epName.match(/\d+/);
-                        if (num && parseInt(num[0]) == targetEp) {
-                            resources.push({
-                                name: `${site.name} (直连)`,
-                                description: `${item.vod_name} [${epName}]`,
-                                url: epLink
-                            });
-                        }
-                    } else { // 是电影
-                        // 电影通常只有一集，或者叫 "HD", "蓝光"
-                        resources.push({
-                            name: `${site.name} (直连)`,
-                            description: `${item.vod_name} [${epName}]`,
-                            url: epLink
-                        });
-                    }
-                });
+            return buildItem({
+                id: item.id, tmdbId: item.id, type: "tv",
+                title: item.name,
+                year: year, poster: item.poster_path, backdrop: item.backdrop_path,
+                rating: item.vote_average?.toFixed(1),
+                genreText: genreText,
+                subTitle: subInfo.join(" | "),
+                desc: item.overview
             });
-            return resources;
-        } catch (e) { return []; }
-    });
-    
-    const res = await Promise.all(tasks);
-    return res.flat();
+        });
+    } catch (e) { return [{ id: "err", type: "text", title: "网络错误" }]; }
 }
 
-// ==========================================
-// 3. 厂长 (Czzy)
-// ==========================================
-const CZZY_URL = "https://www.zxzj.site"; // 替换为在线之家逻辑，因为厂长反爬太严
+// =========================================================================
+// 2. 业务逻辑：综艺时刻 (Variety) - 核心修复
+// =========================================================================
 
-async function searchCzzy(keyword, season, episode) {
+async function loadVarietyCalendar(params = {}) {
+    const { region = "cn", mode = "today", traktClientId } = params;
+    const clientId = traktClientId || DEFAULT_TRAKT_ID;
+
+    // A. 强制热播模式 (不限时间)
+    if (mode === "trending") {
+        return await fetchTmdbVariety(region, null); // 不传日期，默认最新
+    }
+
+    // B. 日期模式 (Today/Tomorrow)
+    // 1. 先尝试 Trakt
+    const dateStr = getSafeDate(mode); // 获取 YYYY-MM-DD
+    const countryParam = region === "global" ? "" : region; 
+    const traktUrl = `https://api.trakt.tv/calendars/all/shows/${dateStr}/1?genres=reality,game-show,talk-show${countryParam ? `&countries=${countryParam}` : ''}`;
+
     try {
-        // 在线之家搜索
-        const res = await Widget.http.get(`${CZZY_URL}/vodsearch/-------------.html?wd=${encodeURIComponent(keyword)}`);
-        const $ = Widget.html.load(res.data);
-        
-        let detailUrl = "";
-        $(".stui-vodlist__thumb").each((i, el) => {
-            if ($(el).attr("title").includes(keyword)) {
-                detailUrl = $(el).attr("href");
-                return false;
-            }
+        const res = await Widget.http.get(traktUrl, {
+            headers: { "Content-Type": "application/json", "trakt-api-version": "2", "trakt-api-key": clientId }
         });
+        const data = res.data || [];
 
-        if (!detailUrl) return [];
-        
-        // 详情页
-        const res2 = await Widget.http.get(`${CZZY_URL}${detailUrl}`);
-        const $2 = Widget.html.load(res2.data);
-        
-        // 找集数
-        const targetEp = episode ? episode.toString() : "1";
-        let playUrl = "";
-        
-        $2(".stui-content__playlist a").each((i, el) => {
-            const text = $2(el).text();
-            if (!season) { playUrl = $2(el).attr("href"); return false; }
-            const num = text.match(/\d+/);
-            if (num && parseInt(num[0]) == targetEp) {
-                playUrl = $2(el).attr("href");
-                return false;
-            }
-        });
-
-        if (!playUrl) return [];
-
-        // 播放页
-        const res3 = await Widget.http.get(`${CZZY_URL}${playUrl}`);
-        const jsonMatch = res3.data.match(/player_aaaa\s*=\s*({.*?})/);
-        if (jsonMatch) {
-            const json = JSON.parse(jsonMatch[1]);
-            return [{
-                name: "在线之家 (高清)",
-                description: "ZXZJ 直连",
-                url: json.url,
-                headers: { "Referer": CZZY_URL }
-            }];
+        if (Array.isArray(data) && data.length > 0) {
+            const promises = data.map(async (item) => {
+                if (!item.show.ids.tmdb) return null;
+                return await fetchTmdbDetail(item.show.ids.tmdb, item);
+            });
+            return (await Promise.all(promises)).filter(Boolean);
         }
     } catch (e) {}
-    return [];
+
+    // 2. Trakt 无数据，使用 TMDB 精准日期兜底
+    // 这里的关键是把 dateStr 传给 TMDB，强制 TMDB 筛选"当天播出"
+    return await fetchTmdbVariety(region, dateStr);
 }
 
-// ==========================================
-// 4. Libvio
-// ==========================================
-const LIB_URL = "https://libvio.app";
+// =========================================================================
+// 3. 辅助函数
+// =========================================================================
 
-async function searchLibvio(keyword, season, episode) {
+async function fetchTmdbVariety(region, dateStr) {
+    const queryParams = {
+        language: "zh-CN",
+        sort_by: "popularity.desc", // 按热度，因为我们已经限定了日期
+        page: 1,
+        with_genres: "10764|10767", // Reality | Talk
+        include_null_first_air_dates: false,
+        timezone: "Asia/Shanghai" // 确保时区对齐
+    };
+
+    if (region !== "global") {
+        queryParams.with_origin_country = region.toUpperCase();
+    }
+
+    // 核心修改：如果传入了具体日期，就筛选 air_date
+    if (dateStr) {
+        queryParams["air_date.gte"] = dateStr;
+        queryParams["air_date.lte"] = dateStr;
+    } else {
+        // 如果没传日期(trending模式)，则按首播时间降序，找最新的
+        queryParams.sort_by = "first_air_date.desc";
+    }
+
     try {
-        const res = await Widget.http.get(`${LIB_URL}/search/-------------.html?wd=${encodeURIComponent(keyword)}`);
-        const $ = Widget.html.load(res.data);
+        const res = await Widget.tmdb.get("/discover/tv", { params: queryParams });
+        const data = res || {};
         
-        let detailUrl = "";
-        $(".stui-vodlist__thumb").each((i, el) => {
-            if ($(el).attr("title").includes(keyword)) {
-                detailUrl = $(el).attr("href");
-                return false;
-            }
-        });
-
-        if (!detailUrl) return [];
-        const res2 = await Widget.http.get(`${LIB_URL}${detailUrl}`);
-        const $2 = Widget.html.load(res2.data);
-        
-        const targetEp = episode ? episode.toString() : "1";
-        let playUrl = "";
-        
-        $2(".stui-content__playlist a").each((i, el) => {
-            const text = $2(el).text();
-            if (!season) { playUrl = $2(el).attr("href"); return false; }
-            const num = text.match(/\d+/);
-            if (num && parseInt(num[0]) == targetEp) {
-                playUrl = $2(el).attr("href");
-                return false;
-            }
-        });
-
-        if (!playUrl) return [];
-        const res3 = await Widget.http.get(`${LIB_URL}${playUrl}`);
-        const match = res3.data.match(/"url":"([^"]+)"/);
-        
-        if (match) {
-            return [{
-                name: "Libvio (蓝光)",
-                description: "极速秒播",
-                url: match[1],
-                headers: { "Referer": LIB_URL }
-            }];
+        if (!data.results || data.results.length === 0) {
+            return [{ id: "empty", type: "text", title: "暂无综艺更新", subTitle: dateStr ? `${dateStr} 无更新` : "暂无数据" }];
         }
-    } catch (e) {}
-    return [];
-}
 
-// ==========================================
-// 5. AGE动漫
-// ==========================================
-const AGE_URL = "https://www.agemys.net";
-
-async function searchAge(keyword, season, episode) {
-    // 简单判断：如果不是动漫，直接跳过
-    // 但有时候很难判断，所以还是搜一下吧，反正并发不慢
-    try {
-        const res = await Widget.http.get(`${AGE_URL}/search?query=${encodeURIComponent(keyword)}`);
-        const $ = Widget.html.load(res.data);
-        
-        let detailUrl = "";
-        $(".cell_imform_name").each((i, el) => {
-            if ($(el).text().includes(keyword)) {
-                detailUrl = $(el).closest("a").attr("href");
-                return false;
+        return data.results.map(item => {
+            const year = (item.first_air_date || "").substring(0, 4);
+            const genreText = getGenreText(item.genre_ids);
+            
+            // 构造日期标签
+            let dateLabel = "近期热播";
+            if (dateStr) {
+                dateLabel = `📅 更新: ${dateStr}`;
             }
+
+            return buildItem({
+                id: item.id, tmdbId: item.id, type: "tv",
+                title: item.name, 
+                year: year, 
+                poster: item.poster_path, 
+                backdrop: item.backdrop_path,
+                rating: item.vote_average?.toFixed(1),
+                genreText: genreText,
+                subTitle: dateLabel, // 显示准确的日期状态
+                desc: item.overview
+            });
         });
 
-        if (!detailUrl) return [];
-        
-        // AGE 的播放地址解析比较麻烦，通常需要 Webview
-        // 这里仅作为示例，如果能提取到 mp4 则返回，否则忽略
-        // 实际上 AGE 需要 VParse，纯 JS 很难搞定
-        // 暂时留空，避免返回无效链接
-        return []; 
-    } catch (e) {}
-    return [];
+    } catch (e) { return [{ id: "err", type: "text", title: "TMDB 错误" }]; }
+}
+
+async function fetchTmdbDetail(tmdbId, traktItem) {
+    try {
+        const d = await Widget.tmdb.get(`/tv/${tmdbId}`, { params: { language: "zh-CN" } });
+        if (!d) return null;
+
+        const ep = traktItem.episode;
+        const airTime = traktItem.first_aired.split("T")[0];
+        const genreText = (d.genres || []).map(g => g.name).slice(0, 2).join(" / ");
+
+        return buildItem({
+            id: d.id, tmdbId: d.id, type: "tv",
+            title: d.name || traktItem.show.title,
+            year: (d.first_air_date || "").substring(0, 4),
+            poster: d.poster_path, backdrop: d.backdrop_path,
+            rating: d.vote_average?.toFixed(1),
+            genreText: genreText,
+            subTitle: `S${ep.season}E${ep.number} · ${ep.title || "更新"}`, // Trakt 特有的单集信息
+            desc: d.overview
+        });
+    } catch (e) { return null; }
+}
+
+// 剧集模块用的日期计算器 (保留原样)
+function calculateDates(mode) {
+    const today = new Date();
+    const toStr = (d) => d.toISOString().split('T')[0];
+    if (mode === "update_today") return { start: toStr(today), end: toStr(today) };
+    if (mode === "premiere_tomorrow") {
+        const tmr = new Date(today); tmr.setDate(today.getDate() + 1); return { start: toStr(tmr), end: toStr(tmr) };
+    }
+    if (mode === "premiere_week") {
+        const start = new Date(today); start.setDate(today.getDate() + 1);
+        const end = new Date(today); end.setDate(today.getDate() + 7);
+        return { start: toStr(start), end: toStr(end) };
+    }
+    if (mode === "premiere_month") {
+        const start = new Date(today); start.setDate(today.getDate() + 1);
+        const end = new Date(today); end.setDate(today.getDate() + 30);
+        return { start: toStr(start), end: toStr(end) };
+    }
+    return { start: toStr(today), end: toStr(today) };
+}
+
+// 综艺模块用的简单日期 (YYYY-MM-DD)
+function getSafeDate(mode) {
+    const d = new Date();
+    if (mode === "tomorrow") d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
 }
