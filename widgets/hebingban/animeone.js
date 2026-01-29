@@ -12,7 +12,7 @@ WidgetMetadata = {
 
     modules: [
         {
-            title: "动漫热榜",
+            title: "动漫热榜&周更表",
             functionName: "loadAnimeHub",
             type: "list",
             cacheDuration: 3600,
