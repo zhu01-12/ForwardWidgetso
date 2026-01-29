@@ -1,8 +1,8 @@
 WidgetMetadata = {
     id: "variety_hub_ultimate_v4_fix",
     title: "全球综艺追更热度榜",
-    author: "Makkapakka",
-    description: "综艺更新时间表$热度榜",
+    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+    description: "综艺更新时间表，热度榜",
     version: "2.0.1",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
