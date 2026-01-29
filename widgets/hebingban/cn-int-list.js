@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "全球影视 | 分流聚合",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
     description: "集大成之作：Trakt/豆瓣/平台分流，全线支持【年份•类型】展示。",
-    version: "1.2.0",
+    version: "1.2.1",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
     // 1. 全局参数 (仅剩 Trakt ID，且选填)
