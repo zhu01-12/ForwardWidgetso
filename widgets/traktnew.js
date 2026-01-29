@@ -1,5 +1,5 @@
 WidgetMetadata = {
-    id: "trakt_personal_mixed_ui",
+    id: "traktnew_mixed_ui",
     title: "Trakt 个人中心 (UI修复)",
     author: "Makkapakka",
     description: "UI优化：追剧日历采用 '日期+集数' (01-30 S01E04) 格式显示。",
