@@ -1,9 +1,9 @@
 WidgetMetadata = {
-    id: "bangumi_weekly_calendar",
-    title: "动漫周更表 (Bangumi)",
-    author: "MakkaPakka",
-    description: "基于 Bangumi 数据源的每日放送表，支持 TMDB 高清封面。",
-    version: "1.0.0",
+    id: "bangumi_weekly_pro",
+    title: "动漫周更表",
+    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+    description: "Bangumi 每日放送表，支持高清封面，类型标签。",
+    version: "2.0.0",
     requiredVersion: "0.0.1",
     site: "https://bgm.tv",
 
@@ -15,7 +15,7 @@ WidgetMetadata = {
             title: "周更表",
             functionName: "loadBangumiCalendar",
             type: "list",
-            cacheDuration: 3600, // 1小时缓存
+            cacheDuration: 3600,
             params: [
                 {
                     name: "weekday",
@@ -32,77 +32,96 @@ WidgetMetadata = {
                         { title: "周六 (土)", value: "6" },
                         { title: "周日 (日)", value: "7" }
                     ]
-                }
+                },
+                // 增加分页参数
+                { name: "page", title: "页码", type: "page" }
             ]
         }
     ]
 };
 
-async function loadBangumiCalendar(params = {}) {
-    const { weekday = "today" } = params;
+// TMDB 类型映射
+const GENRE_MAP = {
+    16: "动画", 10759: "动作冒险", 10765: "科幻奇幻", 35: "喜剧", 18: "剧情",
+    9648: "悬疑", 80: "犯罪", 10762: "儿童", 10751: "家庭"
+};
 
-    // 1. 计算目标 Weekday ID
-    // Bangumi API: 1=Mon, 2=Tue ... 7=Sun
+async function loadBangumiCalendar(params = {}) {
+    const { weekday = "today", page = 1 } = params;
+    const pageSize = 20; // 每页显示数量
+
+    // 1. 计算 Weekday ID
     let targetDayId = parseInt(weekday);
     if (weekday === "today") {
         const today = new Date();
-        const jsDay = today.getDay(); // JS: 0=Sun, 1=Mon...
+        const jsDay = today.getDay();
         targetDayId = jsDay === 0 ? 7 : jsDay;
     }
+    const dayName = getWeekdayName(targetDayId);
 
-    console.log(`[Bangumi] Fetching Weekday: ${targetDayId}`);
+    console.log(`[Bangumi] Fetching Weekday: ${targetDayId}, Page: ${page}`);
 
     try {
-        // 2. 请求 Bangumi Calendar API
         const res = await Widget.http.get("https://api.bgm.tv/calendar");
         const data = res.data || [];
-
-        // 3. 查找对应日期的数据
-        // data 结构: [{weekday: {id: 1}, items: [...]}, ...]
         const dayData = data.find(d => d.weekday && d.weekday.id === targetDayId);
 
         if (!dayData || !dayData.items || dayData.items.length === 0) {
-            return [{ id: "empty", type: "text", title: "暂无更新", subTitle: "该日没有番剧更新" }];
+            return page === 1 ? [{ id: "empty", type: "text", title: "暂无更新" }] : [];
         }
 
-        // 4. 并发匹配 TMDB (获取高清图)
-        const promises = dayData.items.map(async (item) => {
-            // Bangumi Item 结构: { id, name (原名), name_cn (中文), images: { large, ... } }
-            
-            // 构造默认 Item (用 Bangumi 数据兜底)
+        // 2. 本地分页逻辑
+        const allItems = dayData.items;
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        
+        if (start >= allItems.length) return []; // 超出范围
+        const pageItems = allItems.slice(start, end);
+
+        // 3. 并发匹配 TMDB
+        const promises = pageItems.map(async (item) => {
             const title = item.name_cn || item.name;
-            const subTitle = item.name; // 原名
+            const subTitle = item.name;
             const cover = item.images ? (item.images.large || item.images.common) : "";
             
+            // 默认 Item
             let finalItem = {
                 id: `bgm_${item.id}`,
-                type: "tmdb", // 伪装成 TMDB 以便 Forward 处理
+                type: "tmdb",
                 mediaType: "tv",
-                
                 title: title,
-                genreTitle: getWeekdayName(targetDayId), // 显示 "周一"
-                subTitle: subTitle,
-                description: item.summary || "暂无简介",
-                
-                posterPath: cover, // 默认用 Bangumi 图
-                backdropPath: "",
+                subTitle: subTitle, // 原名
+                genreTitle: `${dayName} • 动画`, // 默认标签
+                posterPath: cover,
                 rating: item.rating && item.rating.score ? item.rating.score.toFixed(1) : "0.0",
+                description: item.summary || "暂无简介",
                 year: ""
             };
 
-            // 尝试 TMDB 匹配
             const tmdbItem = await searchTmdbBestMatch(title, subTitle);
             if (tmdbItem) {
                 finalItem.id = String(tmdbItem.id);
                 finalItem.tmdbId = tmdbItem.id;
                 
-                // 替换为高清图
+                // 高清图
                 if (tmdbItem.poster_path) finalItem.posterPath = `https://image.tmdb.org/t/p/w500${tmdbItem.poster_path}`;
                 if (tmdbItem.backdrop_path) finalItem.backdropPath = `https://image.tmdb.org/t/p/w780${tmdbItem.backdrop_path}`;
                 
+                // 元数据更新
                 finalItem.rating = tmdbItem.vote_average ? tmdbItem.vote_average.toFixed(1) : finalItem.rating;
                 finalItem.year = (tmdbItem.first_air_date || "").substring(0, 4);
                 if (tmdbItem.overview) finalItem.description = tmdbItem.overview;
+
+                // 【核心 UI】: 周一 • 科幻 / 冒险
+                const genres = (tmdbItem.genre_ids || [])
+                    .map(id => GENRE_MAP[id])
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join(" / ");
+                
+                if (genres) {
+                    finalItem.genreTitle = `${dayName} • ${genres}`;
+                }
             }
 
             return finalItem;
@@ -115,16 +134,12 @@ async function loadBangumiCalendar(params = {}) {
     }
 }
 
-// ==========================================
 // 辅助工具
-// ==========================================
-
 function getWeekdayName(id) {
     const map = { 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日" };
     return map[id] || "";
 }
 
-// 免 Key TMDB 搜索
 async function searchTmdbBestMatch(query1, query2) {
     let res = await searchTmdb(query1);
     if (!res && query2) res = await searchTmdb(query2);
@@ -133,9 +148,7 @@ async function searchTmdbBestMatch(query1, query2) {
 
 async function searchTmdb(query) {
     if (!query) return null;
-    // 简单的清洗：去掉 "第x季"
     const cleanQuery = query.replace(/第[一二三四五六七八九十\d]+[季章]/g, "").trim();
-    
     try {
         const res = await Widget.tmdb.get("/search/tv", {
             params: { query: encodeURIComponent(cleanQuery), language: "zh-CN", page: 1 }
