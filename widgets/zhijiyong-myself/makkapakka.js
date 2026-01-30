@@ -1,5 +1,5 @@
 WidgetMetadata = {
-  id: "gemini.platform.originals.v2.5",
+  id: "gemini.platform.v2.5",
   title: "流媒体·独家原创 (完美UI版)",
   author: "Gemini & Makkapakka",
   description: "v2.5: 完美复刻参考代码逻辑。严格遵循【日期+集数+题材】格式 (如 01-31 S01E04 科幻)；去除表情符号。",
