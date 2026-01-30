@@ -1,15 +1,15 @@
 WidgetMetadata = {
-    id: "twitch_tv_spoof",
-    title: "Twitch 直播 (TV版)",
+    id: "twitch_native_pro_v4",
+    title: "Twitch 直播 (Pro)",
     author: "Makkapakka",
-    description: "V3.0：伪装成 Android TV 客户端，绕过 Web 端 401 验证。解决无封面、无法播放的问题。",
-    version: "3.0.0",
+    description: "V4.0 终极修复：修正 User-Agent 以绕过 Cloudflare WAF 拦截，同时使用 TV 接口获取真实流地址。",
+    version: "4.0.0",
     requiredVersion: "0.0.1",
     site: "https://www.twitch.tv",
 
     modules: [
         {
-            title: "直播频道",
+            title: "我的关注",
             functionName: "loadLiveStreams",
             type: "list",
             cacheDuration: 0, 
@@ -18,12 +18,12 @@ WidgetMetadata = {
                     name: "streamers",
                     title: "主播 ID",
                     type: "input",
-                    description: "输入ID (例: shaka, fps_shaka, uzi)",
+                    description: "输入ID (例: shaka, shroud, uzi)",
                     value: "shroud, tarik, tenz, zneptunelive, seoi1016"
                 },
                 {
                     name: "quality",
-                    title: "画质",
+                    title: "画质优先",
                     type: "enumeration",
                     value: "chunked",
                     enumOptions: [
@@ -37,10 +37,11 @@ WidgetMetadata = {
     ]
 };
 
-// 🔑 核心机密：Twitch Android TV 的专用 Client-ID
-// 这个 ID 不需要 Integrity Token，非常稳定
-const TV_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"; // 这是一个通用的备用ID，如果不行我们会自动切换
-const ANDROID_TV_UA = "Dalvik/2.1.0 (Linux; U; Android 9; SHIELD Android TV Build/PPR1.180610.011)";
+// 📺 Android TV 的 Client-ID (无需 Integrity Token)
+const CLIENT_ID = "kd1unb4r3yd4jf6tbze5f7h6j197mw";
+
+// 💻 电脑浏览器的 User-Agent (通过 WAF 的关键)
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 async function loadLiveStreams(params = {}) {
     const { streamers, quality } = params;
@@ -48,21 +49,19 @@ async function loadLiveStreams(params = {}) {
 
     const channelNames = streamers.split(/[,，]/).map(s => s.trim().toLowerCase()).filter(Boolean);
     
-    // 构造请求头，伪装成 NVIDIA Shield TV
+    // 构造请求头：混合伪装
     const headers = {
-        "Client-ID": "kd1unb4r3yd4jf6tbze5f7h6j197mw", // 这是真实的 Android TV Client ID
-        "User-Agent": ANDROID_TV_UA,
+        "Client-ID": CLIENT_ID,
+        "User-Agent": USER_AGENT,
         "Content-Type": "application/json",
-        "X-Device-Id": "forward-widget-" + Math.floor(Math.random() * 100000) // 随机设备ID
+        "Accept": "application/json",
+        "Origin": "https://www.twitch.tv",
+        "Referer": "https://www.twitch.tv/"
     };
 
-    const items = [];
-
-    // 并行处理所有主播
     const promises = channelNames.map(async (channel) => {
         try {
-            // 1. 请求 GQL 获取 Stream 信息和 播放 Token
-            // 这是一个合并查询，效率更高
+            // 1. 请求 GQL (获取 Token 和 直播信息)
             const gqlQuery = {
                 operationName: "PlaybackAccessToken",
                 extensions: {
@@ -76,7 +75,7 @@ async function loadLiveStreams(params = {}) {
                     login: channel,
                     isVod: false,
                     vodID: "",
-                    playerType: "frontpage" // 伪装成首页播放器
+                    playerType: "frontpage"
                 }
             };
 
@@ -85,21 +84,27 @@ async function loadLiveStreams(params = {}) {
                 body: JSON.stringify(gqlQuery)
             });
 
-            const body = JSON.parse(res.body || res.data);
+            // 🛡️ 错误防御：检查返回的是否为 HTML (Cloudflare 拦截页面)
+            const resData = res.body || res.data;
+            if (typeof resData === 'string' && resData.trim().startsWith('<')) {
+                throw new Error("被防火墙拦截 (WAF Blocked)");
+            }
+
+            const body = JSON.parse(resData);
             const data = body.data;
 
-            // 检查主播是否在线
+            // 检查是否在线
             if (!data || !data.stream) {
                  return {
                     id: `off_${channel}`,
                     type: "text",
-                    title: channel,
+                    title: channel.toUpperCase(),
                     subTitle: "⚫️ 离线 / Offline",
-                    description: "该主播未开播，或 ID 填写错误。"
+                    description: "该主播未开播"
                 };
             }
 
-            // 2. 拿到 Token 和 Signature
+            // 2. 提取 Token 和 Sig
             const token = data.streamPlaybackAccessToken?.value;
             const sig = data.streamPlaybackAccessToken?.signature;
 
@@ -107,46 +112,42 @@ async function loadLiveStreams(params = {}) {
                 throw new Error("无法获取播放令牌");
             }
 
-            // 3. 构造 M3U8 链接 (Usher API)
+            // 3. 构造 M3U8 链接
             const m3u8Url = `https://usher.ttvnw.net/api/channel/hls/${channel}.m3u8?allow_source=true&allow_audio_only=true&allow_spectre=false&player=twitchweb&playlist_include_framerate=true&segment_preference=4&sig=${sig}&token=${token}`;
 
-            // 4. 处理封面
-            // 优先使用 API 返回的图，如果没有则用 CDN 拼接
+            // 4. 封面处理
             let poster = data.stream.previewImageURL; 
             if (poster) {
                 poster = poster.replace("{width}", "640").replace("{height}", "360");
-                // 加上时间戳防止封面缓存
-                poster += `?t=${new Date().getTime()}`;
-            } else {
-                poster = "https://vod-secure.twitch.tv/_404/404_processing_640x360.png";
+                poster += `?t=${Date.now()}`;
             }
 
-            // 5. 返回 Jable 风格的 Item
+            // 5. 返回结果 (视频流)
             return {
                 id: `live_${channel}`,
-                type: "url", // 使用 url 类型
-                videoUrl: m3u8Url, // 赋值给 videoUrl，Forward 会调用系统播放器
+                type: "url", 
+                videoUrl: m3u8Url, // Forward 识别此字段调用系统播放器
                 
                 title: data.stream.broadcaster.displayName || channel,
-                subTitle: `🔴 ${formatViewers(data.stream.viewersCount)} • ${data.stream.game?.name || "未知游戏"}`,
+                subTitle: `🔴 ${formatViewers(data.stream.viewersCount)} • ${data.stream.game?.name || "未知"}`,
                 posterPath: poster,
-                
                 description: data.stream.title || "无标题",
                 
-                // 播放时需要的 Header (虽然 m3u8 通常不校验，但加上更稳)
+                // 播放时也带上伪装 Header
                 customHeaders: {
-                    "User-Agent": ANDROID_TV_UA,
+                    "User-Agent": USER_AGENT,
                     "Referer": "https://www.twitch.tv/"
                 }
             };
 
         } catch (e) {
-            // 如果出错，返回错误提示卡片
+            console.log(`[TwitchError] ${channel}: ${e.message}`);
+            // 出错时返回红色提示卡片
             return { 
                 id: `err_${channel}`, 
                 type: "text", 
-                title: `${channel} 错误`, 
-                subTitle: e.message 
+                title: `${channel} 加载失败`, 
+                subTitle: e.message.substring(0, 30) // 截取错误信息防止过长
             };
         }
     });
@@ -155,7 +156,6 @@ async function loadLiveStreams(params = {}) {
     return results;
 }
 
-// 辅助函数：格式化人数 (12000 -> 1.2万)
 function formatViewers(num) {
     if (!num) return "0";
     if (num >= 10000) return (num / 10000).toFixed(1) + "万";
