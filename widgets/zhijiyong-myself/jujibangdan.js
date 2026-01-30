@@ -1,9 +1,9 @@
 var WidgetMetadata = {
-  id: "trakt_global_final",
-  title: "全球剧集榜单 (稳定版)",
+  id: "trakt_global_fixed_ultimate",
+  title: "全球剧集榜单 (最终完美版)",
   author: "Makkapakka",
-  description: "修复一切报错。支持Trakt热榜、分页、详细副标题。",
-  version: "1.0.4",
+  description: "Trakt数据源。修复变量丢失报错，支持分页、日期显示与自动资源匹配。",
+  version: "1.0.6",
   requiredVersion: "0.0.1",
   site: "https://trakt.tv",
   
@@ -20,7 +20,7 @@ var WidgetMetadata = {
   modules: [
     {
       title: "影视榜单",
-      description: "浏览热门影视",
+      description: "浏览全球热门影视",
       requiresWebView: false,
       functionName: "loadRankings",
       type: "list",
@@ -106,7 +106,7 @@ async function loadRankings(params) {
     const results = await Promise.all(requests);
     let allItems = [];
 
-    // 混合排序逻辑
+    // 混合排序逻辑：交替插入，避免一屏全是电影
     if (type === "all" && results.length === 2) {
       const [movies, shows] = results;
       const maxLen = Math.max(movies.length, shows.length);
@@ -135,9 +135,6 @@ async function loadRankings(params) {
 // ===========================
 
 async function fetchTrakt(clientId, mediaType, sort, region, page) {
-  // 1. 预先定义类型标签，防止后续报错
-  const typeLabel = mediaType === "movies" ? "电影" : "剧集";
-  
   let url = `${API_BASE}/${mediaType}/${sort}?limit=20&page=${page}&extended=full`;
   if (region && region !== "global") {
     url += `&countries=${region}`;
@@ -156,8 +153,8 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
     if (!Array.isArray(data)) return [];
 
     return data.map(item => {
-      // 2. 数据清洗
       let subject = null;
+      // 这里的逻辑兼容 popular 和 trending 两种接口结构
       const singularKey = mediaType === "movies" ? "movie" : "show";
       
       if (item[singularKey]) {
@@ -166,17 +163,19 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
         subject = item;
       }
 
-      // 3. 安全检查：如果缺数据，直接跳过
+      // 安全检查：如果缺数据，直接跳过
       if (!subject || !subject.ids || !subject.ids.tmdb) return null;
 
-      // 4. 构建日期副标题
+      // === 构造日期和类型 ===
       let dateStr = "未知日期";
       const rawDate = subject.released || subject.first_aired || subject.year;
       if (rawDate) {
          dateStr = String(rawDate).substring(0, 10);
       }
       
-      const finalSubTitle = `[${typeLabel}] 📅 ${dateStr}`;
+      // ✅ 关键修复：直接在这里定义中文类型名，不再依赖外部变量
+      const typeName = mediaType === "movies" ? "电影" : "剧集";
+      const finalSubTitle = `[${typeName}] 📅 ${dateStr}`;
 
       return {
         id: `trakt_${mediaType}_${subject.ids.tmdb}`,
@@ -191,7 +190,8 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
     }).filter(Boolean); // 过滤掉 null
     
   } catch (e) {
-    // 静默失败，返回空数组以免炸掉整个页面
+    // 发生网络错误时返回空数组
+    console.log(e);
     return [];
   }
 }
