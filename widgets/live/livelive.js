@@ -1,11 +1,11 @@
-WidgetMetadata = {
+var WidgetMetadata = {
   id: "live_clean_aggregate",
-  title: "聚合直播LIVE",
+  title: "聚合直播 (纯净版)",
   author: "Makkapakka",
-  description: "虎牙、B站、Twitch等直播。",
+  description: "基于 iill.top 源。自动过滤无关信息，智能提取虎牙、B站、Twitch，支持自定义关键词。",
   version: "1.0.0",
   requiredVersion: "0.0.1",
-  site: "https://m.iill.top",
+  site: "[https://m.iill.top](https://m.iill.top)",
   
   modules: [
     {
@@ -40,7 +40,7 @@ WidgetMetadata = {
 // 配置区域
 // ===========================
 
-const M3U_SOURCE = "https://m.iill.top/Live.m3u";
+const M3U_SOURCE = "[https://m.iill.top/Live.m3u](https://m.iill.top/Live.m3u)";
 
 // 🚫 需要屏蔽的分组名称 (完全匹配或包含)
 const BLOCKED_GROUPS = [
@@ -97,18 +97,12 @@ async function loadFeaturedChannels() {
     if (sec.items.length > 0) {
       result.push({
         title: `${sec.title} (${sec.items.length})`,
-        type: "section", // 或者直接用 section 结构
         childItems: sec.items
       });
     }
   }
   
-  // Forward 格式兼容：如果使用了 section 结构，直接返回数组即可
-  // 如果 Forward 版本需要打平，可以在这里调整，通常 sections 结构是支持的
-  return result.map(sec => ({
-      title: sec.title,
-      childItems: sec.childItems
-  }));
+  return result;
 }
 
 // 2. 自定义关键词搜索
@@ -159,8 +153,6 @@ function parseM3U(content) {
 
     if (line.startsWith("#EXTINF:")) {
       // 解析信息行
-      // 示例: #EXTINF:-1 tvg-logo="..." group-title="虎牙", 频道名
-      
       // 1. 提取分组 (group-title)
       let group = "";
       const groupMatch = line.match(/group-title="([^"]*)"/);
@@ -191,13 +183,12 @@ function parseM3U(content) {
       // 这是链接行
       if (currentInfo) {
         channels.push({
-          id: line, //以此链接为ID
+          id: line, 
           title: currentInfo.title,
           subTitle: currentInfo.group || "直播频道",
           posterPath: currentInfo.posterPath,
           videoUrl: line,
-          group: currentInfo.group,
-          type: "tmdb", // 使用美观的卡片样式
+          type: "url", // 修正类型为 url 以支持直接播放
           mediaType: "tv",
           playerType: "system"
         });
