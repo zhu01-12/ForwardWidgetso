@@ -1,26 +1,19 @@
 var WidgetMetadata = {
-  id: "trakt_global_fixed_ultimate",
-  title: "全球剧集榜单 (最终完美版)",
+  id: "trakt_global_lite_v3",
+  title: "全球剧集榜单 (精简版)",
   author: "Makkapakka",
-  description: "Trakt数据源。修复变量丢失报错，支持分页、日期显示与自动资源匹配。",
-  version: "1.0.6",
+  description: "内置Trakt源。支持分页、自动显示日期、自动匹配资源。",
+  version: "1.1.0",
   requiredVersion: "0.0.1",
   site: "https://trakt.tv",
   
-  globalParams: [
-    {
-      name: "client_id",
-      title: "Trakt Client ID",
-      type: "input",
-      description: "留空则使用内置ID。",
-      value: "" 
-    }
-  ],
+  // 移除配置项，强制内置 Key
+  globalParams: [],
 
   modules: [
     {
       title: "影视榜单",
-      description: "浏览全球热门影视",
+      description: "浏览热门影视",
       requiresWebView: false,
       functionName: "loadRankings",
       type: "list",
@@ -75,10 +68,10 @@ var WidgetMetadata = {
 };
 
 // ===========================
-// 配置区域
+// 常量定义
 // ===========================
 
-const DEFAULT_CLIENT_ID = "95b59922670c84040db3632c7aac6f33704f6ffe5cbf3113a056e37cb45cb482";
+const TRAKT_CLIENT_ID = "95b59922670c84040db3632c7aac6f33704f6ffe5cbf3113a056e37cb45cb482";
 const API_BASE = "https://api.trakt.tv";
 
 // ===========================
@@ -86,7 +79,6 @@ const API_BASE = "https://api.trakt.tv";
 // ===========================
 
 async function loadRankings(params) {
-  const clientId = params.client_id || DEFAULT_CLIENT_ID;
   const region = params.region || "global";
   const type = params.type || "shows";
   const sort = params.sort || "trending";
@@ -95,18 +87,18 @@ async function loadRankings(params) {
   let requests = [];
   
   if (type === "all" || type === "movies") {
-    requests.push(fetchTrakt(clientId, "movies", sort, region, page));
+    requests.push(fetchTrakt("movies", sort, region, page));
   }
   
   if (type === "all" || type === "shows") {
-    requests.push(fetchTrakt(clientId, "shows", sort, region, page));
+    requests.push(fetchTrakt("shows", sort, region, page));
   }
 
   try {
     const results = await Promise.all(requests);
     let allItems = [];
 
-    // 混合排序逻辑：交替插入，避免一屏全是电影
+    // 混合排序：交替显示
     if (type === "all" && results.length === 2) {
       const [movies, shows] = results;
       const maxLen = Math.max(movies.length, shows.length);
@@ -120,21 +112,21 @@ async function loadRankings(params) {
 
     if (allItems.length === 0) {
       if (page > 1) return [{ title: "没有更多内容了", type: "text" }];
-      return [{ title: "列表为空", subTitle: "请检查网络或Client ID", type: "text" }];
+      return [{ title: "列表为空", subTitle: "请检查网络连接", type: "text" }];
     }
 
     return allItems;
 
   } catch (e) {
-    return [{ title: "发生错误", subTitle: String(e.message), type: "text" }];
+    return [{ title: "运行错误", subTitle: String(e.message), type: "text" }];
   }
 }
 
 // ===========================
-// 核心请求函数
+// 网络请求
 // ===========================
 
-async function fetchTrakt(clientId, mediaType, sort, region, page) {
+async function fetchTrakt(mediaType, sort, region, page) {
   let url = `${API_BASE}/${mediaType}/${sort}?limit=20&page=${page}&extended=full`;
   if (region && region !== "global") {
     url += `&countries=${region}`;
@@ -145,7 +137,7 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
       headers: {
         "Content-Type": "application/json",
         "trakt-api-version": "2",
-        "trakt-api-key": clientId
+        "trakt-api-key": TRAKT_CLIENT_ID
       }
     });
 
@@ -153,8 +145,11 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
     if (!Array.isArray(data)) return [];
 
     return data.map(item => {
+      // 1. 确定类型名称
+      const typeLabel = mediaType === "movies" ? "电影" : "剧集";
+
+      // 2. 提取主体数据
       let subject = null;
-      // 这里的逻辑兼容 popular 和 trending 两种接口结构
       const singularKey = mediaType === "movies" ? "movie" : "show";
       
       if (item[singularKey]) {
@@ -163,35 +158,32 @@ async function fetchTrakt(clientId, mediaType, sort, region, page) {
         subject = item;
       }
 
-      // 安全检查：如果缺数据，直接跳过
+      // 3. 过滤无效数据
       if (!subject || !subject.ids || !subject.ids.tmdb) return null;
 
-      // === 构造日期和类型 ===
-      let dateStr = "未知日期";
+      // 4. 格式化日期
+      let dateStr = "待定";
       const rawDate = subject.released || subject.first_aired || subject.year;
       if (rawDate) {
          dateStr = String(rawDate).substring(0, 10);
       }
       
-      // ✅ 关键修复：直接在这里定义中文类型名，不再依赖外部变量
-      const typeName = mediaType === "movies" ? "电影" : "剧集";
-      const finalSubTitle = `[${typeName}] 📅 ${dateStr}`;
+      const subTitleText = `[${typeLabel}] 📅 ${dateStr}`;
 
       return {
         id: `trakt_${mediaType}_${subject.ids.tmdb}`,
         type: "tmdb",
-        tmdbId: parseInt(subject.ids.tmdb), // 确保是数字
+        tmdbId: parseInt(subject.ids.tmdb), // 强制转数字
         mediaType: mediaType === "movies" ? "movie" : "tv",
         title: subject.title,
-        subTitle: finalSubTitle,
+        subTitle: subTitleText,
         description: subject.overview || "",
-        posterPath: "" // 让 Forward 自动加载
+        posterPath: "" 
       };
-    }).filter(Boolean); // 过滤掉 null
+    }).filter(Boolean);
     
   } catch (e) {
-    // 发生网络错误时返回空数组
-    console.log(e);
+    console.log("Error: " + e.message);
     return [];
   }
 }
