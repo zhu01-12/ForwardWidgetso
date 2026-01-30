@@ -1,9 +1,9 @@
 WidgetMetadata = {
-    id: "variety_hub_future_v3",
-    title: "全球综艺时间表 (未来版)",
-    author: "Makkapakka",
-    description: "纯净未来版：仅显示从今天开始的更新排期，不再回顾过去。",
-    version: "3.0.0",
+    id: "variety_hub_ultimate_v4_fix",
+    title: "全球综艺追更热度榜",
+    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+    description: "综艺更新时间表，热度榜",
+    version: "2.0.2",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
 
