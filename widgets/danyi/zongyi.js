@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "全球综艺追更热度榜",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
     description: "综艺更新时间表，热度榜",
-    version: "2.0.2",
+    version: "2.0.3",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
 
@@ -31,7 +31,6 @@ WidgetMetadata = {
                     value: "14",
                     belongTo: { paramName: "listType", value: ["calendar"] },
                     enumOptions: [
-                        // 意思全变了：现在代表看未来多少天
                         { title: "未来 7 天", value: "7" },
                         { title: "未来 14 天", value: "14" },
                         { title: "未来 30 天", value: "30" }
@@ -67,10 +66,10 @@ function formatShortDate(dateStr) {
     return `${m}-${d}`;
 }
 
-// 获取今天 (YYYY-MM-DD)
+// 获取今天 (YYYY-MM-DD) - 用于比较
 function getTodayStr() {
     const d = new Date();
-    // 考虑时区偏移，直接取 ISO 前段可能有时差，这里用本地时间修正
+    // 简单粗暴处理时区，确保取到的是当前用户所在日期的字符串
     const offset = d.getTimezoneOffset() * 60000;
     const local = new Date(d.getTime() - offset);
     return local.toISOString().split('T')[0];
@@ -92,6 +91,8 @@ function getFutureDateStr(days) {
 async function loadVarietyUltimate(params = {}) {
     const { listType = "calendar", region = "all", days = "14", page = 1 } = params;
 
+    const todayStr = getTodayStr(); // 获取今天的日期字符串 (2026-01-30)
+
     let discoverUrl = `/discover/tv`;
     let queryParams = {
         language: "zh-CN",
@@ -108,14 +109,11 @@ async function loadVarietyUltimate(params = {}) {
         queryParams.with_origin_country = "US|KR|JP|GB|TW|HK|TH";
     }
 
-    // === 📅 核心修改：时间窗口设定 ===
+    // === 📅 步骤1：初步筛选 ===
     if (listType === "calendar") {
-        // 起点：今天
-        const startDate = getTodayStr(); 
-        // 终点：未来 N 天
         const endDate = getFutureDateStr(days);
-        
-        queryParams["air_date.gte"] = startDate;
+        // API 查询时，gte 设为今天
+        queryParams["air_date.gte"] = todayStr;
         queryParams["air_date.lte"] = endDate;
     }
 
@@ -136,29 +134,27 @@ async function loadVarietyUltimate(params = {}) {
                 const nextEp = detail.next_episode_to_air;
                 const lastEp = detail.last_episode_to_air;
                 
-                let sortDate = "2099-12-31"; // 默认扔到最后
+                let sortDate = "1900-01-01"; 
                 let displayInfoStr = ""; 
 
-                // 优先找下一集 (Next Episode) - 因为我们要看未来
+                // 逻辑：找到最接近未来的那一集
                 if (nextEp) {
                     sortDate = nextEp.air_date;
                     displayInfoStr = `${formatShortDate(sortDate)} S${nextEp.season_number}E${nextEp.episode_number}`;
-                } 
-                // 如果没有下一集信息（比如今天刚播完，TMDB还没更新next），但last_episode是今天
-                else if (lastEp && lastEp.air_date >= getTodayStr()) {
+                } else if (lastEp) {
                     sortDate = lastEp.air_date;
                     displayInfoStr = `${formatShortDate(sortDate)} S${lastEp.season_number}E${lastEp.episode_number}`;
-                } 
-                // 兜底：如果是首播
-                else {
-                    if (listType === "calendar" && item.first_air_date >= getTodayStr()) {
-                        sortDate = item.first_air_date;
-                        displayInfoStr = `${formatShortDate(sortDate)} 首播`;
-                    } else {
-                        // 如果既没有未来集数，也不是未来首播，说明这个节目在所选时间段内其实不符合“未来”定义
-                        // 虽然 discover 筛选了 air_date，但具体集数可能 API 滞后，这里做个严格过滤
-                        if (listType === "calendar") return null;
-                        displayInfoStr = "暂无排期";
+                } else {
+                    sortDate = item.first_air_date;
+                    displayInfoStr = `${formatShortDate(sortDate)} 首播`;
+                }
+
+                // === 🛑 步骤2：最终强制过滤 (The Strict Gatekeeper) ===
+                // 无论这一集是 next 还是 last，只要它的日期 < 今天，直接扔掉。
+                // 这样就能干掉 "01-29" 这种昨天的数据
+                if (listType === "calendar") {
+                    if (!sortDate || sortDate < todayStr) {
+                        return null; 
                     }
                 }
 
@@ -174,11 +170,10 @@ async function loadVarietyUltimate(params = {}) {
 
         const detailedItems = (await Promise.all(detailPromises)).filter(Boolean);
 
-        // === 📅 核心修改：排序 ===
+        // === 📅 步骤3：排序 (今天 -> 未来) ===
         if (listType === "calendar") {
             detailedItems.sort((a, b) => {
                 if (a.sortDate === b.sortDate) return 0;
-                // 正序排列：Today -> Future
                 return a.sortDate > b.sortDate ? 1 : -1; 
             });
         }
@@ -190,7 +185,6 @@ async function loadVarietyUltimate(params = {}) {
             let finalSubTitle = "";
 
             if (listType === "calendar") {
-                // 强制双显示，万无一失
                 finalGenreTitle = displayInfoStr; 
                 finalSubTitle = displayInfoStr;   
             } else {
