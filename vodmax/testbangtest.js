@@ -1,8 +1,8 @@
 WidgetMetadata = {
-    id: "global_tv_calendar_ultimate",
-    title: "全球追剧时刻表",
+    id: "global_testr_ultimate",
+    title: "全表",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-    description: "聚合全球剧集更新表&综艺排期&bangumi动漫周更表。",
+    description: "大宠爱。",
     version: "2.1.0",
     requiredVersion: "0.0.1",
     site: "https://www.themoviedb.org",
