@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "Trakt免key版",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
     description: "内置 API Key 版：只需填写用户名追剧日历、待看、收藏及历史记录。",
-    version: "1.0.9", // 版本号 +1
+    version: "1.1.0", // 版本号 +1
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
 
@@ -207,7 +207,7 @@ async function fetchTraktList(section, type, sort, page, user, id) {
 
     // 修复重点：如果选的是 "collection" (收藏)，则请求 Favorites List 接口
     if (section === "collection") {
-        url = `https://api.trakt.tv/users/${user}/lists/favorites/items/${type}?extended=full&page=${page}&limit=${limit}`;
+        url = `https://api.trakt.tv/users/${user}/favorites/items/${type}?extended=full&page=${page}&limit=${limit}`;
     } else {
         // watchlist, history 保持原样
         url = `https://api.trakt.tv/users/${user}/${section}/${type}?extended=full&page=${page}&limit=${limit}`;
