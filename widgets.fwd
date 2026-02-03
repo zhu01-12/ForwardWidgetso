@@ -1,7 +1,7 @@
 {
   "title": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖'𝙨 𝙒𝙞𝙙𝙜𝙚𝙩𝙨",
   "description": "汇聚追剧日历,流媒体top10,烂番茄好评榜，弹幕api-pro等追剧模块",
-  "icon": "https://github.com/MakkaPakka518/ForwardWidgets/raw/main/makka.png",
+  "icon": "https://github.com/zhu01-12/ForwardWidgetso/raw/main/makka.png",
   "widgets": [
     {
       "id": "anime_omni_fix",
@@ -10,7 +10,7 @@
       "requiredVersion": "0.0.1",
       "version": "2.2.4",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/animeone.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/animeone.js"
     },
     {
       "id": "trakt_personal_key",
@@ -19,7 +19,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.8",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/traktkey.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/traktkey.js"
     },
     {
       "id": "trakt_personal_mixed",
@@ -28,7 +28,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.8",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/traktlistpro.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/traktlistpro.js"
     },
     {
       "id": "variety_hub_ultimate_v4_fix",
@@ -37,7 +37,7 @@
       "requiredVersion": "0.0.1",
       "version": "2.0.3",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/danyi/zongyi.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/danyi/zongyi.js"
     },
     {
       "id": "western_trends_hub",
@@ -46,7 +46,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.2",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/bangdan-one.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/bangdan-one.js"
     },
     {
       "id": "global_tv_calendar_ultimate",
@@ -55,7 +55,7 @@
       "requiredVersion": "0.0.1",
       "version": "2.0.9",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/zhuijurili-one.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/zhuijurili-one.js"
     },
     {
       "id": "cinephile_hub_ultimate",
@@ -64,7 +64,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.3",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/movielist%26interesting.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/movielist%26interesting.js"
     },
     {
       "id": "discover_hub_ultimate",
@@ -73,7 +73,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.4",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/today-one.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/hebingban/today-one.js"
     },
     {
       "id": "ultimate_media_hub_pro_ui",
@@ -82,7 +82,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.2.1",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/cn-int-bangdan.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/cn-int-bangdan.js"
     },
     {
       "id": "makka.platform.originals",
@@ -91,7 +91,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.5",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/zhijiyong-myself/pingtai.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/zhijiyong-myself/pingtai.js"
     },
     {
       "id": "platform.originals.ui.fix",
@@ -100,7 +100,7 @@
       "requiredVersion": "0.0.1",
       "version": "1.0.4",
       "author": "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-      "url": "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/pingtaidujia.js"
+      "url": "https://raw.githubusercontent.com/zhu01-12/ForwardWidgetso/refs/heads/main/widgets/pingtaidujia.js"
     },
     {
       "id": "forward.danmu.pro.online_dict",
