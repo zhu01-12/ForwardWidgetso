@@ -113,7 +113,7 @@
     },
     {
       "id": "danmu.pro_dict",
-      "title": "多源弹幕",
+      "title": "多源弹幕test",
       "description": "支持添加多条api并自命名&繁简互转",
       "requiredVersion": "0.0.1",
       "version": "1.1.2",
