@@ -1,6 +1,6 @@
 WidgetMetadata = {
   id: "danmu.pro_dict",
-  title: "多源弹幕",
+  title: "多源弹幕test",
   version: "1.1.2",
   requiredVersion: "0.0.2",
   description: "支持添加多条api并自命名&繁简互转",
