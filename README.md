@@ -1,7 +1,7 @@
 # MakkaPakka's ForwardWidgets
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/MakkaPakka-%20Forward.jpg" width="300px"/>
+  <img src="https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/Forward-MakkaPakka.jpg" width="300px"/>
 
 
 以下插件纯属个人爱好，侵权请联系删除。
