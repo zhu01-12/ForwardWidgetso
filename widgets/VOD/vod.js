@@ -1,13 +1,13 @@
 const RESOURCE_SITES = `
-非凡影视,http://ffzy4.tv/api.php/provide/vod/
-如意资源站,https://cj.rycjapi.com/api.php/provide/vod/at/json/
-量子资源站,https://cj.lziapi.com/api.php/provide/vod/at/json/
-爱奇艺资源站,https://iqiyizyapi.com/api.php/provide/vod/
-卧龙资源,https://wolongzyw.com/api.php/provide/vod
-最大资源,https://api.zuidapi.com/api.php/provide/vod
-暴风资源,https://bfzyapi.com/api.php/provide/vod
-无尽资源,https://api.wujinapi.com/api.php/provide/vod
-百度云资源,https://api.apibdzy.com/api.php/provide/vod
+非凡影视,https://all.embymeow.ccwu.cc/http://ffzy4.tv/api.php/provide/vod/
+如意资源站,https://all.embymeow.ccwu.cc/https://cj.rycjapi.com/api.php/provide/vod/at/json/
+量子资源站,https://all.embymeow.ccwu.cc/https://cj.lziapi.com/api.php/provide/vod/at/json/
+爱奇艺资源站,https://all.embymeow.ccwu.cc/https://iqiyizyapi.com/api.php/provide/vod/
+卧龙资源,https://all.embymeow.ccwu.cc/https://wolongzyw.com/api.php/provide/vod
+最大资源,https://all.embymeow.ccwu.cc/https://api.zuidapi.com/api.php/provide/vod
+暴风资源,https://all.embymeow.ccwu.cc/https://bfzyapi.com/api.php/provide/vod
+无尽资源,https://all.embymeow.ccwu.cc/https://all.embymeow.ccwu.cc/https://api.wujinapi.com/api.php/provide/vod
+百度云资源,https://all.embymeow.ccwu.cc/https://api.apibdzy.com/api.php/provide/vod
 
 `;
 
