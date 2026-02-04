@@ -1,212 +1,236 @@
-WidgetMetadata = {
-    id: "vod_agg_dynamic",
-    title: "VOD 聚合 (GitHub源)",
-    author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
-    description: "自动读取远程 tv.json 配置，并发搜索全网资源。",
-    version: "1.0.0",
-    requiredVersion: "0.0.2",
-    
-    globalParams: [
-        { 
-            name: "configUrl", 
-            title: "配置链接 (JSON)", 
-            type: "input", 
-            value: "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/tv.json" 
-        },
-        {
-            name: "maxConcurrency",
-            title: "最大并发数",
-            type: "enumeration",
-            value: "10",
-            enumOptions: [
-                { title: "保守 (5个)", value: "5" },
-                { title: "标准 (10个)", value: "10" },
-                { title: "暴力 (20个)", value: "20" }
-            ]
-        }
-    ],
+// 默认内置你的 GitHub 源地址
+const DEFAULT_SOURCE_URL = "https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/tv.json";
 
-    modules: [
-        {
-            id: "search",
-            title: "聚合搜索",
-            type: "vod", // 指定为 VOD 类型
-            functionName: "searchVod",
-            params: [
-                { name: "wd", title: "关键词", type: "input" },
-                { name: "page", title: "页码", type: "page" }
-            ]
-        },
-        {
-            id: "detail",
-            title: "获取详情",
-            type: "vod",
-            functionName: "getVodDetail",
-            params: []
-        }
-    ]
+const CHINESE_NUM_MAP = {
+  '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+  '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
 };
 
-// ==========================================
-// 1. 配置加载与缓存
-// ==========================================
-const CACHE_KEY_SITES = "vod_sites_cache";
-
-async function getSites(configUrl) {
-    // 尝试读取缓存
-    let cached = await Widget.storage.get(CACHE_KEY_SITES);
-    if (cached) {
-        try {
-            const parsed = JSON.parse(cached);
-            // 简单判断缓存是否过期 (例如 1 小时) - 这里简化为每次重启脚本或手动清理时更新
-            // 如果你想每次都强制刷新，可以注释掉缓存逻辑
-            if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-                // 后台静默更新一下，下次生效
-                updateSitesInBackground(configUrl);
-                return parsed;
-            }
-        } catch (e) {}
+WidgetMetadata = {
+  id: "vod_stream_Max",
+  title: "VOD Max",
+  icon: "https://assets.vvebo.vip/scripts/icon.png",
+  version: "1.0.2",
+  requiredVersion: "0.0.1",
+  description: "为你的Forward提供VOD资源",
+  author: "𝙈𝙖𝙠𝙠𝙖 ℙ𝕒𝕜𝕜𝕒",
+  site: "https://github.com/MakkaPakka518/ForwardWidgets",
+  globalParams: [
+    {
+      name: "multiSource",
+      title: "是否启用聚合搜索",
+      type: "enumeration",
+      enumOptions: [
+        { title: "启用", value: "enabled" },
+        { title: "禁用", value: "disabled" }
+      ]
+    },
+    {
+      name: "VodData",
+      title: "源配置 (JSON/CSV内容 或 在线URL)",
+      type: "input",
+      value: DEFAULT_SOURCE_URL // 这里直接使用你的链接
     }
-    return await updateSitesInBackground(configUrl);
+  ],
+  modules: [
+    {
+      id: "loadResource",
+      title: "加载资源",
+      functionName: "loadResource",
+      type: "stream",
+      params: [],
+    }
+  ],
+};
+
+// --- 辅助工具函数 ---
+
+const isM3U8Url = (url) => url?.toLowerCase().includes('m3u8') || false;
+
+function extractSeasonInfo(seriesName) {
+  if (!seriesName) return { baseName: seriesName, seasonNumber: 1 };
+  const chineseMatch = seriesName.match(/第([一二三四五六七八九十\d]+)[季部]/);
+  if (chineseMatch) {
+    const val = chineseMatch[1];
+    const seasonNum = CHINESE_NUM_MAP[val] || parseInt(val) || 1;
+    const baseName = seriesName.replace(/第[一二三四五六七八九十\d]+[季部]/, '').trim();
+    return { baseName, seasonNumber: seasonNum };
+  }
+  const digitMatch = seriesName.match(/(.+?)(\d+)$/);
+  if (digitMatch) {
+    return { baseName: digitMatch[1].trim(), seasonNumber: parseInt(digitMatch[2]) || 1 };
+  }
+  return { baseName: seriesName.trim(), seasonNumber: 1 };
 }
 
-async function updateSitesInBackground(url) {
-    try {
-        const res = await Widget.http.get(url);
-        let data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
-        
-        // 适配 TVBox 格式 (通常在 sites 或 lives 字段，或者根数组)
-        let sites = [];
-        if (Array.isArray(data)) {
-            sites = data;
-        } else if (data.sites && Array.isArray(data.sites)) {
-            sites = data.sites;
+function extractPlayInfoForCache(item, siteTitle, type) {
+  const { vod_name, vod_play_url, vod_play_from, vod_remarks = '' } = item;
+  if (!vod_name || !vod_play_url) return [];
+
+  const playSources = vod_play_url.replace(/#+$/, '').split('$$$');
+  const sourceNames = (vod_play_from || '').split('$$$');
+  
+  return playSources.flatMap((playSource, i) => {
+    const sourceName = sourceNames[i] || '默认源';
+    const isTV = playSource.includes('#');
+    const results = [];
+
+    if (type === 'tv' && isTV) {
+      const episodes = playSource.split('#').filter(Boolean);
+      episodes.forEach(ep => {
+        const [epName, url] = ep.split('$');
+        if (url && isM3U8Url(url)) {
+          const epMatch = epName.match(/第(\d+)集/);
+          results.push({
+            name: siteTitle,
+            description: `${vod_name} - ${epName}${vod_remarks ? ' - ' + vod_remarks : ''} - [${sourceName}]`,
+            url: url.trim(),
+            _ep: epMatch ? parseInt(epMatch[1]) : null
+          });
         }
-
-        // 过滤出有效的 CMS 接口 (通常 type: 0 或 1)
-        // 假设 structure: { "key": "...", "name": "...", "api": "..." }
-        const validSites = sites.filter(s => s.api && s.api.startsWith("http"));
-        
-        if (validSites.length > 0) {
-            await Widget.storage.set(CACHE_KEY_SITES, JSON.stringify(validSites));
-        }
-        return validSites;
-    } catch (e) {
-        return [];
-    }
-}
-
-// ==========================================
-// 2. 核心搜索逻辑
-// ==========================================
-
-async function searchVod(params) {
-    const { wd, page, configUrl, maxConcurrency } = params;
-    if (!wd) return [];
-
-    const sites = await getSites(configUrl);
-    if (!sites || sites.length === 0) {
-        return [{ vod_id: "err", vod_name: "加载源失败，请检查网络或链接", vod_remarks: "Error" }];
-    }
-
-    // 限制并发，避免瞬间请求过多导致卡顿
-    const limit = parseInt(maxConcurrency) || 10;
-    // 选取前 N 个源进行搜索 (或者你可以改为全部搜索，但速度会慢)
-    // 这里为了演示聚合效果，我们分批处理
-    
-    let allResults = [];
-    
-    // 分批执行器
-    for (let i = 0; i < sites.length; i += limit) {
-        const chunk = sites.slice(i, i + limit);
-        const tasks = chunk.map(site => fetchSingleSite(site, wd, page));
-        const results = await Promise.all(tasks);
-        
-        // 合并结果
-        results.forEach(res => {
-            if (res && res.length > 0) {
-                allResults = allResults.concat(res);
-            }
+      });
+    } else if (type === 'movie' && !isTV) {
+      const firstM3U8 = playSource.split('#').find(v => isM3U8Url(v.split('$')[1]));
+      if (firstM3U8) {
+        const [quality, url] = firstM3U8.split('$');
+        const qualityText = quality.toLowerCase().includes('tc') ? '抢先版' : '正片';
+        results.push({
+          name: siteTitle,
+          description: `${vod_name} - ${qualityText} - [${sourceName}]`,
+          url: url.trim()
         });
-
-        // 如果已经搜到足够多的结果 (比如超过 20 条)，可以提前停止，提升体验
-        // if (allResults.length > 20) break; 
+      }
     }
-
-    return allResults;
+    return results;
+  });
 }
 
-// 搜索单个站点
-async function fetchSingleSite(site, wd, page) {
-    try {
-        const api = site.api;
-        // 构造 CMS 标准请求: ?ac=detail&wd=xxx (用 detail 模式通常能直接拿播放列表，虽然数据量大一点)
-        // 加上 &at=json 强制要求返回 JSON，避免处理 XML
-        const url = `${api}?ac=detail&wd=${encodeURIComponent(wd)}&pg=${page}&at=json`;
-        
-        const res = await Widget.http.get(url, { timeout: 3000 }); // 设置短超时，跳过慢源
-        const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+// 核心修改：支持解析 文本内容 或 转换后的对象
+function parseResourceSites(content) {
+  // 如果已经是对象（JSON解析后），直接处理
+  if (typeof content === 'object') {
+     // 兼容不同的JSON格式 key: name/title/key, url/value/api
+     return (Array.isArray(content) ? content : []).map(s => ({ 
+        title: s.name || s.title || s.key, 
+        value: s.url || s.value || s.api 
+     })).filter(s => s.title && s.value);
+  }
 
-        if (data && data.list && Array.isArray(data.list)) {
-            return data.list.map(item => ({
-                vod_id: item.vod_id.toString(),
-                vod_name: item.vod_name,
-                vod_pic: item.vod_pic,
-                vod_remarks: `[${site.name}] ${item.vod_remarks || item.vod_time || ""}`,
-                // 我们把 API 地址埋在 extra 字段里，方便详情页直接用，不用再匹配 source
-                extra: { 
-                    apiUrl: api,
-                    sourceName: site.name
-                }
-            }));
-        }
-    } catch (e) {
-        // 忽略错误，聚合搜索容忍部分源挂掉
+  // 如果是字符串
+  const trimmed = String(content || "").trim();
+  
+  try {
+    // 尝试解析JSON字符串
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      return JSON.parse(trimmed).map(s => ({ 
+          title: s.name || s.title || s.key, 
+          value: s.url || s.value || s.api 
+      })).filter(s => s.title && s.value);
     }
+    // 尝试解析CSV (逗号分隔)
+    return trimmed.split('\n').map(line => {
+      const [title, value] = line.split(',').map(s => s.trim());
+      if (title && value?.startsWith('http')) {
+        return { title, value: value.endsWith('/') ? value : value + '/' };
+      }
+      return null;
+    }).filter(Boolean);
+  } catch (e) {
     return [];
+  }
 }
 
-// ==========================================
-// 3. 详情与播放解析
-// ==========================================
+// --- 主入口函数 ---
 
-async function getVodDetail(params) {
-    const { vod_id, extra } = params;
-    
-    // 如果搜索列表里带了 extra 信息（这是最高效的）
-    let apiUrl = extra?.apiUrl;
-    
-    if (!apiUrl) {
-        // 如果没有 extra，说明是收藏列表进来的，或者 params 丢失
-        // 这里需要一种机制找回源，为了简化，我们提示用户重新搜索
-        // 或者你可以遍历所有源去 getDetail (不推荐)
-        return { vod_play_from: "Error", vod_play_url: "源信息丢失，请重新搜索" };
+async function loadResource(params) {
+  const { seriesName, type = 'tv', season, episode, multiSource, VodData } = params;
+  
+  if (multiSource !== "enabled" || !seriesName) return [];
+
+  // 1. 获取源配置 (新增：支持在线URL获取)
+  let rawSourceData = VodData;
+  
+  // 如果输入的是 http 开头的链接，先去下载内容
+  if (rawSourceData && rawSourceData.trim().startsWith("http")) {
+      try {
+          const res = await Widget.http.get(rawSourceData.trim());
+          rawSourceData = res.data; // 获取到的可能是 JSON 对象或字符串
+      } catch (e) {
+          console.error("在线源获取失败");
+          return [];
+      }
+  }
+
+  const resourceSites = parseResourceSites(rawSourceData);
+  if (resourceSites.length === 0) return []; // 无有效源
+
+  const { baseName, seasonNumber } = extractSeasonInfo(seriesName);
+  const targetSeason = season ? parseInt(season) : seasonNumber;
+  const targetEpisode = episode ? parseInt(episode) : null;
+
+  // 2. 尝试从缓存获取
+  const cacheKey = `vod_exact_cache_${baseName}_s${targetSeason}_${type}`;
+  let allResources = [];
+  
+  try {
+    const cached = Widget.storage.get(cacheKey);
+    if (cached && Array.isArray(cached)) {
+      console.log(`命中缓存: ${cacheKey}`);
+      allResources = cached;
     }
+  } catch (e) {}
 
-    try {
-        // 直接请求详情
-        const url = `${apiUrl}?ac=detail&ids=${vod_id}&at=json`;
-        const res = await Widget.http.get(url);
-        const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+  // 3. 如果没有缓存，则发起网络请求
+  if (allResources.length === 0) {
+    const fetchTasks = resourceSites.map(async (site) => {
+      try {
+        const response = await Widget.http.get(site.value, {
+          params: { ac: "detail", wd: baseName.trim() },
+          timeout: 10000 
+        });
+        const list = response?.data?.list;
+        if (!Array.isArray(list)) return [];
 
-        if (data && data.list && data.list.length > 0) {
-            const info = data.list[0];
-            return {
-                vod_id: info.vod_id,
-                vod_name: info.vod_name,
-                vod_pic: info.vod_pic,
-                type_name: info.type_name,
-                vod_year: info.vod_year,
-                vod_area: info.vod_area,
-                vod_remarks: info.vod_remarks,
-                vod_actor: info.vod_actor,
-                vod_content: info.vod_content,
-                vod_play_from: info.vod_play_from, // 播放源列表 (如: qiyi$$$qq)
-                vod_play_url: info.vod_play_url    // 播放地址列表
-            };
-        }
-    } catch (e) {
-        return null;
+        return list.flatMap(item => {
+          const itemInfo = extractSeasonInfo(item.vod_name);
+          
+          if (itemInfo.baseName !== baseName || itemInfo.seasonNumber !== targetSeason) {
+            return [];
+          }
+          
+          return extractPlayInfoForCache(item, site.title, type);
+        });
+      } catch (error) {
+        return [];
+      }
+    });
+
+    const results = await Promise.all(fetchTasks);
+    const merged = results.flat();
+
+    // URL 去重
+    const urlSet = new Set();
+    allResources = merged.filter(res => {
+      if (urlSet.has(res.url)) return false;
+      urlSet.add(res.url);
+      return true;
+    });
+
+    // 写入缓存
+    if (allResources.length > 0) {
+      try { Widget.storage.set(cacheKey, allResources, 10800); } catch (e) {}
     }
-    return null;
+  }
+
+  // 4. 结果返回
+  if (type === 'tv' && targetEpisode !== null) {
+    return allResources.filter(res => {
+      if (res._ep !== undefined && res._ep !== null) {
+        return res._ep === targetEpisode;
+      }
+      return res.description.includes(`第${targetEpisode}集`);
+    });
+  }
+
+  return allResources;
 }
