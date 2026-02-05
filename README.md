@@ -1,10 +1,10 @@
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/Forward-MakkaPakka.jpg" width="300px"/>
+</p>
 
 # ForwardWidgets
 
-这里收集了我用AI制作的 Forward 应用模块 (Widgets)。
+这里收集了我用 AI 制作的 Forward 应用模块 (Widgets)。
 旨在增强 “自己” Forward 的使用体验，为“自己”提供更多样化的数据展示和功能。
 也顺便分享了出来。
 
@@ -14,7 +14,21 @@
 
 | 组件名称 | 描述 | 安装 |
 | :--- | :--- | :--- |
-| **模块合集** | 全部模块 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets.fwd) |
+| **📦 模块合集** | **全部模块一键订阅** (widgets.fwd) | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets.fwd) |
+| **二次元全境聚合** | 一站式聚合多平台动漫榜单。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/animeone.js) |
+| **Trak 追剧日历 免key版** | 内置 Key 版 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/traktkey.js) |
+| **Trak 追剧日历&个人中心** | 追剧日历 & Trakt 待看/收藏/历史。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/traktlistpro.js) |
+| **全球综艺追更热度榜** | 综艺更新时间表，热度榜。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/danyi/zongyi.js) |
+| **欧美风向标 \| 口碑与热度** | 聚合烂番茄(口碑)与流媒体平台(热度)。| [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/bangdan-one.js) |
+| **全球追剧时刻表** | 聚合全球剧集更新 & 综艺排期 & bangumi 动漫周更表。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/zhuijurili-one.js) |
+| **影迷宝藏 \| 系列与流派** | 一键获得电影系列合集&探索未知流派。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/movielist%26interesting.js) |
+| **探索发现 \| 惊喜推荐** | 聚合【今天看什么】、【Trakt惊喜推荐】与【那年今日】。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/today-one.js) |
+| **全球影视 \| 分流聚合** | 集大成之作：Trakt/豆瓣/平台分流，全线支持 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/cn-int-bangdan.js) |
+| **流媒体·独家原创（更新时间版）** | 各平台独播剧。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/zhijiyong-myself/pingtai.js) |
+| **流媒体·独家原创** | 发现 Netflix/HBO/腾讯/B站等平台自制内容。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/pingtaidujia.js) |
+| **弹幕多源** | 支持添加多条 api 并自命名 & 繁简互转。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/danmuapi-ProMax.js) |
+| **多源弹幕 test** | 支持添加多条 api 并自命名 & 繁简互转。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/duoyuandanmu.js) |
+| **IMDb 热榜** | IMDb 全球榜单，支持日/周纬度切换。 | [复制链接](https://raw.githubusercontent.com/MakkaPakka518/ForwardWidgets/refs/heads/main/widgets/hebingban/imdb%26cn.js) |
 
 > 💡 **提示**: 点击表格中的“复制链接”获取 `.js` 地址，然后在 Forward 中添加。
 
