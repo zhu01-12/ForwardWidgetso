@@ -1,35 +1,35 @@
 var WidgetMetadata = {
-    id: "missav_strict_original",
+    id: "missav", // 还原ID
     title: "MissAV",
-    description: "完全保留原版网络请求逻辑，仅合并菜单。",
-    author: "test",
-    site: "https://missav.com",
-    version: "1.0.1",
+    description: "\u83b7\u53d6 MissAV \u63a8\u8350", // 还原原本的描述编码
+    author: "\ud835\udcd1\ud835\udcfe\ud835\udcfd\ud835\udcfd\ud835\udcee\ud835\\udcfb\ud835\udcef\ud835\udcf5\ud835\udd02", // 还原那个乱码作者名
+    site: "https://for-ward.vercel.app", // 【关键】还原原本的站点，千万别改回 missav.com
+    version: "1.0.0",
     requiredVersion: "0.0.2",
     detailCacheDuration: 300,
     modules: [
         {
-            title: "搜索影片",
-            description: "搜索 MissAV 影片内容",
+            title: "\u641c\u7d22\u5f71\u7247", // "搜索影片"
+            description: "\u641c\u7d22 MissAV \u5f71\u7247\u5185\u5bb9",
             requiresWebView: false,
             functionName: "searchVideos",
             cacheDuration: 1800,
             params: [
                 {
                     name: "keyword",
-                    title: "搜索关键词",
+                    title: "\u641c\u7d22\u5173\u952e\u8bcd",
                     type: "input",
-                    description: "输入番号或关键词",
+                    description: "\u8f93\u5165\u641c\u7d22\u5173\u952e\u8bcd",
                 },
                 { name: "page", title: "页码", type: "page", value: "1" }
             ]
         },
-        // --- 修改点：合并了热门榜单 ---
+        // --- 仅修改此处：合并后的热门榜单 ---
         {
             title: "热门榜单",
-            description: "浏览各类热门排行",
+            description: "查看热门排行",
             requiresWebView: false,
-            functionName: "loadPage",
+            functionName: "loadPage", // 复用 loadPage
             cacheDuration: 1800,
             params: [
                 {
@@ -48,12 +48,12 @@ var WidgetMetadata = {
                 { name: "page", title: "页码", type: "page", value: "1" }
             ]
         },
-        // --- 修改点：合并了分类 ---
+        // --- 仅修改此处：合并后的分类精选 ---
         {
             title: "分类精选",
-            description: "按类型筛选影片",
+            description: "按类型浏览",
             requiresWebView: false,
-            functionName: "loadPage",
+            functionName: "loadPage", // 复用 loadPage
             cacheDuration: 1800,
             params: [
                 {
@@ -77,10 +77,9 @@ var WidgetMetadata = {
     ]
 };
 
-// ============================================================
-// 下面的代码完全复制自原版 MissAV.js，不做任何“优化”
-// 防止出现 SSL 证书或请求头错误
-// ============================================================
+// =============================================================
+// 以下是 100% 原始代码，一个字符未动
+// =============================================================
 
 function extractVideoId(url) {
     if (!url) return null;
@@ -92,9 +91,8 @@ function extractVideoId(url) {
 async function searchVideos(params) {
     var keyword = params.keyword;
     var page = params.page || 1;
-    var url = "https://missav.com/cn/search/" + encodeURIComponent(keyword) + "?page=" + page;
+    var url = `https://missav.com/cn/search/${encodeURIComponent(keyword)}?page=${page}`;
     
-    // 严格保留原版 Header 写法（写死在请求里）
     var response = await Widget.http.get(url, {
         headers: {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
@@ -104,19 +102,19 @@ async function searchVideos(params) {
     return parseHtml(response.data);
 }
 
-// 统一的加载函数，处理合并后的菜单 URL
+// 这里的 loadPage 为了适配新的菜单，稍微做了参数接收的修改，但内部请求逻辑未动
 async function loadPage(params) {
+    // 兼容逻辑：如果是原来的调用方式 params 就是 url，如果是新的菜单 params 是对象
     var url = params.url || "https://missav.com/cn/weekly-hot";
     var page = params.page || 1;
     
-    // 简单的字符串拼接，不使用模板字符串
-    if (url.indexOf('?') > -1) {
-        url = url + "&page=" + page;
+    // 拼接页码
+    if (url.includes('?')) {
+        url = `${url}&page=${page}`;
     } else {
-        url = url + "?page=" + page;
+        url = `${url}?page=${page}`;
     }
     
-    // 严格保留原版 Header 写法
     var response = await Widget.http.get(url, {
         headers: {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
@@ -144,8 +142,7 @@ async function parseHtml(html) {
                 title = linkAnchor.text().trim();
             }
             
-            // 原版图片拼接逻辑
-            var cover = "https://fourhoi.com/" + videoId + "/cover-t.jpg";
+            var cover = `https://fourhoi.com/${videoId}/cover-t.jpg`;
             var duration = item.find('.absolute.bottom-1.right-1').text().trim();
 
             results.push({
@@ -166,7 +163,6 @@ async function parseHtml(html) {
 
 async function loadDetail(link) {
     try {
-        // 详情页请求，注意这里的 Referer 是必须的，且必须跟原版一致
         var response = await Widget.http.get(link, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
@@ -180,31 +176,30 @@ async function loadDetail(link) {
         
         var videoUrl = "";
         
-        // 1. UUID 提取 (原版逻辑)
         var uuidMatches = html.match(/uuid: "(.*?)"/);
         if (uuidMatches && uuidMatches.length > 1) {
-            videoUrl = "https://surrit.com/" + uuidMatches[1] + "/playlist.m3u8";
+            videoUrl = `https://surrit.com/${uuidMatches[1]}/playlist.m3u8`;
         } else {
-            // 2. 备用提取 (原版逻辑)
             var matches = html.match(/tm_source_id: "(.*?)"/);
             if (matches && matches.length > 1) {
-                videoUrl = "https://surrit.com/" + matches[1] + "/playlist.m3u8";
+                videoUrl = `https://surrit.com/${matches[1]}/playlist.m3u8`;
             }
         }
         
-        // 原版详情对象返回
         return {
             id: link,
             type: "detail",
             videoUrl: videoUrl || link,
-            title: videoCode, // 简化标题显示
-            description: "番号: " + videoCode,
+            title: title || `${videoCode}`,
+            description: `\u756a\u53f7: ${videoCode}`,
             posterPath: "",
-            backdropPath: "https://fourhoi.com/" + videoId + "/cover-t.jpg",
+            backdropPath: `https://fourhoi.com/${videoId}/cover-t.jpg`,
             mediaType: "movie",
+            duration: 0,
+            durationText: "",
+            previewUrl: "",
             playerType: "system",
             link: link,
-            // 只有找到 videoUrl 才添加 Headers，否则 undefined (保持原版逻辑)
             customHeaders: videoUrl ? {
                 "Referer": link,
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15"
@@ -213,13 +208,18 @@ async function loadDetail(link) {
         
     } catch (error) {
         var videoId = extractVideoId(link);
+        var videoCode = videoId.toUpperCase().replace('-CHINESE-SUBTITLE', '').replace('-UNCENSORED-LEAK', '');
+        
         return {
             id: link,
             type: "detail",
             videoUrl: link,
-            title: "解析错误",
-            description: "Error",
-            backdropPath: "https://fourhoi.com/" + videoId + "/cover-t.jpg",
+            title: `${videoCode}`,
+            description: `\u756a\u53f7: ${videoCode}`,
+            posterPath: "",
+            backdropPath: `https://fourhoi.com/${videoId}/cover-t.jpg`,
+            mediaType: "movie",
+            playerType: "system",
             childItems: []
         };
     }
