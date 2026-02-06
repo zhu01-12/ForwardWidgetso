@@ -1,12 +1,12 @@
 WidgetMetadata = {
-  id: "jable_rewrite_pure_v1",
-  title: "Jable (重写稳定版)",
-  description: "重写核心逻辑，修复搜索和播放，支持榜单。",
+  id: "jable_rewrite_pure_v2",
+  title: "Jable (搜索修复版)",
+  description: "修复搜索报错问题，采用网页直连模式。",
   author: "Jable_Dev",
   site: "https://jable.tv",
-  version: "2.0.0",
+  version: "2.1.0",
   requiredVersion: "0.0.2",
-  detailCacheDuration: 0, // 详情页不缓存，避免链接过期
+  detailCacheDuration: 0,
   modules: [
     {
       title: "搜索",
@@ -69,32 +69,33 @@ const HEADERS = {
 };
 
 /**
- * 搜索功能
+ * 搜索功能 - 修复版
+ * 放弃 mode=async，直接请求页面 HTML，避免 API 返回空数据
  */
 async function searchVideo(params) {
   const keyword = params.keyword;
   if (!keyword) return [];
 
-  // 计算偏移量：API的 from 不是页码，而是从第几个视频开始
-  // 假设每页24个 (Jable默认)
   const page = parseInt(params.page) || 1;
   const fromIndex = (page - 1) * 24 + 1;
 
-  // 使用通用列表接口 + 搜索关键词
-  const url = `${BASE_URL}/search/${encodeURIComponent(keyword)}/?mode=async&function=get_block&block_id=list_videos_common_videos_list&q=${encodeURIComponent(keyword)}&sort_by=post_date&from=${fromIndex}`;
-
+  // 修正：直接构建网页 URL，而不是 API URL
+  // 例如：https://jable.tv/search/keyword/?from=1&sort_by=post_date
+  const url = `${BASE_URL}/search/${encodeURIComponent(keyword)}/?from=${fromIndex}&sort_by=post_date`;
+  
+  // 搜索结果页也是标准的列表结构，fetchAndParseList 可以通用解析
   return await fetchAndParseList(url);
 }
 
 /**
  * 热门榜单
+ * 榜单 API 既然正常，继续保持 mode=async 提高速度
  */
 async function getRankList(params) {
   const sort = params.sort_by || "video_viewed_week";
   const page = parseInt(params.page) || 1;
   const fromIndex = (page - 1) * 24 + 1;
 
-  // 使用热门接口
   const url = `${BASE_URL}/hot/?mode=async&function=get_block&block_id=list_videos_common_videos_list&sort_by=${sort}&from=${fromIndex}`;
 
   return await fetchAndParseList(url);
@@ -120,7 +121,6 @@ async function fetchAndParseList(url) {
     const res = await Widget.http.get(url, { headers: HEADERS });
     const html = res.data;
     
-    // 如果返回空字符串，说明到底了
     if (!html || html.length < 100) return [];
 
     const $ = Widget.html.load(html);
@@ -130,31 +130,27 @@ async function fetchAndParseList(url) {
     $(".video-img-box").each((i, el) => {
       const $el = $(el);
       
-      // 提取标题和链接
       const titleLink = $el.find(".title a");
       const title = titleLink.text().trim();
       let href = titleLink.attr("href");
       
-      // 提取封面
       const imgTag = $el.find(".img-box img");
       let cover = imgTag.attr("data-src") || imgTag.attr("src");
       
-      // 提取时长
       const duration = $el.find(".label").text().trim();
 
-      // 数据清洗
       if (href && !href.startsWith("http")) {
-        href = href; // 有时候是相对路径，但Jable通常返回完整路径，这里保留原样
+        href = href; 
       }
 
       if (title && href) {
         items.push({
           title: title,
-          link: href, // 这是详情页链接，传给 loadDetail
-          backdropPath: cover, // 封面
-          releaseDate: duration, // 把时长显示在日期位置
-          type: "movie", // Forward 类型
-          id: href // 唯一标识
+          link: href, 
+          backdropPath: cover, 
+          releaseDate: duration, 
+          type: "movie", 
+          id: href 
         });
       }
     });
@@ -168,16 +164,13 @@ async function fetchAndParseList(url) {
 
 /**
  * 详情页 & 播放解析
- * Forward 会调用这个函数来获取 videoUrl
  */
 async function loadDetail(link) {
   try {
-    // 1. 请求详情页 HTML
     const res = await Widget.http.get(link, { headers: HEADERS });
     const html = res.data;
 
-    // 2. 正则提取 hlsUrl
-    // 目标代码片段: var hlsUrl = 'https://...m3u8';
+    // 正则提取 hlsUrl
     const hlsMatch = html.match(/var hlsUrl\s*=\s*'(https?:\/\/[^']+)'/);
     
     if (!hlsMatch) {
@@ -186,8 +179,7 @@ async function loadDetail(link) {
 
     const m3u8Url = hlsMatch[1];
 
-    // 3. 提取推荐列表 (猜你喜欢)
-    // 这里的解析逻辑和上面列表解析类似
+    // 提取推荐列表
     const $ = Widget.html.load(html);
     const relatedItems = [];
     $("#list_videos_common_videos_list .video-img-box").each((i, el) => {
@@ -204,26 +196,23 @@ async function loadDetail(link) {
         }
     });
 
-    // 4. 返回 Forward 标准详情对象
     return {
       id: link,
       title: $(".header-left h4").text().trim() || "Jable Video",
       description: $(".header-left .visible-xs").text().trim(),
-      videoUrl: m3u8Url, // 关键：播放地址
+      videoUrl: m3u8Url, 
       mediaType: "movie",
-      playerType: "system", // 使用系统播放器
-      // 关键头信息：Jable 必须验证 Referer 才能播放
+      playerType: "system", 
       customHeaders: {
         "User-Agent": HEADERS["User-Agent"],
-        "Referer": link, // 引用页必须是视频详情页地址
+        "Referer": link, // 必须带上
         "Origin": BASE_URL
       },
-      childItems: relatedItems // 底部推荐视频
+      childItems: relatedItems 
     };
 
   } catch (e) {
     console.log("Detail fetch error: " + e.message);
-    // 抛出错误会在界面显示
     throw e;
   }
 }
