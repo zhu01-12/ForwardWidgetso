@@ -1,7 +1,7 @@
 // 源代码作者: 阿米诺斯
 // Modified by: MakkaPakka (Menu Optimized)
 var WidgetMetadata = {
-    id: "forward.combined.media.lists.v2",
+    id: "forward.ysbd.v2",
     title: "影视榜单优化版",
     description: "豆瓣 / B站 / 猫眼 / TMDB 聚合榜单",
     author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
