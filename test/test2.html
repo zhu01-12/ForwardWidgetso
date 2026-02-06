@@ -32,7 +32,6 @@
         body {
             background-color: #050505;
             color: white;
-            /* 保持 Flex 布局逻辑，确保不遮挡 */
             height: 100vh;
             height: 100dvh; 
             overflow: hidden;
@@ -109,7 +108,6 @@
         /* 🃏 滑动容器 */
         .snap-x-mandatory { scroll-snap-type: x mandatory; }
         .snap-center { scroll-snap-align: center; }
-        /* 调整 Padding 以适应较宽的卡片 */
         #slider-container { padding: 0 max(calc(50vw - 140px), 1.5rem); } 
         
         .card-gradient-1 { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
@@ -120,7 +118,7 @@
         .spin-trigger { transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .spin-active { transform: rotate(1080deg); }
 
-        /* 📱 底部 Dock (Flex 布局核心) */
+        /* 📱 底部 Dock */
         .bottom-dock {
             flex-shrink: 0;
             padding-bottom: env(safe-area-inset-bottom);
@@ -207,14 +205,8 @@
         </div>
     </main>
 
-    <div class="bottom-dock w-full z-50">
-        <a href="https://t.me/makkapakka777" target="_blank"
-           class="mb-3 mt-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 text-xs font-medium backdrop-blur-sm flex items-center hover:bg-white/10 transition-colors">
-            <i class="fa-brands fa-telegram mr-1.5"></i>
-            <span id="contact-btn-text">联系作者</span>
-        </a>
-
-        <div class="w-full max-w-md mx-auto px-6 grid grid-cols-2 gap-4 mb-3">
+    <div class="bottom-dock w-full z-50 pt-4">
+        <div class="w-full max-w-md mx-auto px-6 grid grid-cols-2 gap-4 mb-4">
             <button onclick="togglePreview(true)"
                class="flex items-center justify-center py-3.5 rounded-2xl bg-white/10 border border-white/10 text-white font-bold backdrop-blur-md active:scale-95 transition-transform">
                 <i class="fa-solid fa-eye mr-2 text-emerald-400"></i>
@@ -228,8 +220,15 @@
             </a>
         </div>
 
-        <div class="text-[10px] text-white/30 font-medium tracking-wide pb-2">
-            © 2026 𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖 • Forward
+        <div class="w-full flex items-center justify-center gap-3 pb-4 border-t border-white/5 pt-3 mt-1">
+            <div class="text-[10px] text-white/30 font-medium tracking-wide">
+                © 2026 𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖 • Forward
+            </div>
+            <div class="w-px h-3 bg-white/10"></div> <a href="https://t.me/makkapakka777" target="_blank"
+               class="group flex items-center text-[10px] text-white/40 hover:text-white/80 transition-colors bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded-full border border-white/5">
+                <i class="fa-brands fa-telegram mr-1.5 text-xs group-hover:text-blue-400 transition-colors"></i>
+                <span id="contact-btn-text">联系作者</span>
+            </a>
         </div>
     </div>
 
@@ -337,8 +336,7 @@
                 const link = config.forwardBase + encodeURIComponent(w.url);
                 const txt = w.lang[currentLang] || w.lang['zh-CN'];
                 
-                // 💎 修改点：改回了较宽、较矮的经典比例
-                // w-[64vw] (宽), h-[300px] (适中)
+                // 保持原来的经典比例
                 const card = `
                     <div class="snap-center widget-card shrink-0 w-[64vw] sm:w-[280px] h-[300px] relative rounded-[1.8rem] overflow-hidden flex flex-col group active:scale-95">
                         <div class="absolute inset-0 ${gradientClass} opacity-90"></div>
