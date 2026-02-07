@@ -2,9 +2,9 @@ WidgetMetadata = {
   id: "danmu.pro.online",
   title: "LoaVar",
   version: "5.2.0",
-  requiredVersion: "0.0.2",
-  description: "支持添加多条api并自命名&繁简互转",
-  author: "𝙈𝙖𝙠𝙠𝙖𝙋𝙖𝙠𝙠𝙖",
+  requiredVersion: "0.0.3",
+  description: "支持添加多条api",
+  author: "小振ℓινє",
   
     globalParams: [
         { name: "server", title: "源1 (必填)", type: "input", value: "https://api.dandanplay.net" },
